@@ -4,7 +4,7 @@ import { Library } from './Library';
 import { SoloPlay } from './SoloPlay';
 import { RoomSession } from './RoomSession';
 import { Results } from './Results';
-import { createRoom, joinRoom, leaveRoom, setRoomGame } from '../multiplayer/rooms';
+import { createRoom, joinRoom, leaveRoom, quitMatch, setRoomGame } from '../multiplayer/rooms';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import type { GameFinishPayload } from '../games/types';
 import { Panel } from '../ui/Panel';
@@ -140,6 +140,20 @@ export function App() {
     }
   };
 
+  const quitGame = async () => {
+    const code = roomCode;
+    if (!code) {
+      setScreen({ name: 'library' });
+      return;
+    }
+    try {
+      await quitMatch(code, getOrCreatePlayerId());
+    } catch {
+      /* still leave the match UI */
+    }
+    setScreen({ name: 'library' });
+  };
+
   const playInRoom = async (gameId: string) => {
     if (!roomCode) return;
     setBusy(true);
@@ -182,7 +196,7 @@ export function App() {
         <Home
           onPlay={goLibrary}
           activeRoom={roomCode}
-          onReturnToRoom={() => setScreen({ name: 'room' })}
+          onLobby={() => setScreen({ name: 'room' })}
           onQuitMultiplayer={quitMultiplayer}
         />
       ) : null}
@@ -194,7 +208,8 @@ export function App() {
           onCreateRoom={handleCreate}
           onJoinRoom={handleJoin}
           activeRoom={roomCode}
-          onReturnToRoom={() => setScreen({ name: 'room' })}
+          onLobby={() => setScreen({ name: 'room' })}
+          onQuitMultiplayer={quitMultiplayer}
           onPlayInRoom={playInRoom}
         />
       ) : null}
@@ -224,8 +239,8 @@ export function App() {
       {screen.name === 'room' && roomCode ? (
         <RoomSession
           code={roomCode}
-          onHome={goHome}
           onBrowseGames={goLibrary}
+          onQuitGame={quitGame}
         />
       ) : null}
     </div>

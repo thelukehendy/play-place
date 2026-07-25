@@ -5,6 +5,7 @@ import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import { isFirebaseConfigured } from '../multiplayer/firebase';
 import {
   finishTurnGame,
+  getPresence,
   markFinished,
   playersList,
   rematch,
@@ -23,11 +24,11 @@ import { copyText, roomInviteUrl, shareRoomInvite } from '../lib/invite';
 
 type Props = {
   code: string;
-  onHome: () => void;
   onBrowseGames: () => void;
+  onQuitGame: () => void;
 };
 
-export function RoomSession({ code, onHome, onBrowseGames }: Props) {
+export function RoomSession({ code, onBrowseGames, onQuitGame }: Props) {
   const [room, setRoom] = useState<RoomData | null>(null);
   const [error, setError] = useState('');
   const [inviteNote, setInviteNote] = useState('');
@@ -45,7 +46,7 @@ export function RoomSession({ code, onHome, onBrowseGames }: Props) {
     return (
       <Panel>
         <p>{error}</p>
-        <Button onClick={onHome}>Home</Button>
+        <Button onClick={onBrowseGames}>Games</Button>
       </Panel>
     );
   }
@@ -61,16 +62,18 @@ export function RoomSession({ code, onHome, onBrowseGames }: Props) {
   const players = playersList(room);
   const isHost = room.hostId === player.id;
   const game = getGame(room.gameId);
+  const me = room.players?.[player.id];
+  const myPresence = me ? getPresence(me) : 'lobby';
 
-  if (room.status === 'lobby') {
+  if (room.status === 'lobby' || (room.status === 'playing' && myPresence === 'lobby')) {
     return (
       <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
         <div className="row" style={{ color: 'var(--cream)', textShadow: '1px 1px 0 var(--ink)' }}>
           <h2 className="h2" style={{ flex: 1, color: 'var(--gold)' }}>
-            Room {room.code}
+            Lobby · {room.code}
           </h2>
-          <Button variant="ghost" onClick={onHome}>
-            Home
+          <Button variant="ghost" onClick={onBrowseGames}>
+            Games
           </Button>
         </div>
         <Panel>
@@ -79,9 +82,19 @@ export function RoomSession({ code, onHome, onBrowseGames }: Props) {
               Demo mode: rooms stay on this device only. Add Firebase for real friend play — see README.
             </p>
           ) : null}
-          <p className="muted" style={{ marginBottom: 8 }}>
-            Party stays linked after each match. Quit multiplayer from Home when you&apos;re done.
-          </p>
+
+          {room.status === 'playing' ? (
+            <p className="muted" style={{ marginBottom: 8 }}>
+              You&apos;re in the lobby. Friends still in the match keep playing — you&apos;ll see results
+              when they finish, or browse games anytime.
+            </p>
+          ) : (
+            <p className="muted" style={{ marginBottom: 8 }}>
+              Party stays linked after each match. Quit multiplayer from the games screen when
+              you&apos;re done.
+            </p>
+          )}
+
           <p className="h3">Share invite</p>
           <p
             style={{
@@ -136,19 +149,30 @@ export function RoomSession({ code, onHome, onBrowseGames }: Props) {
           <div style={{ height: 14 }} />
           <p className="h3">Players</p>
           <ul style={{ paddingLeft: 18, fontWeight: 700 }}>
-            {players.map((p) => (
-              <li key={p.id}>
-                {p.name}
-                {p.id === room.hostId ? ' 👑' : ''}
-                {p.id === player.id ? ' (you)' : ''}
-                {!p.connected ? ' (away)' : ''}
-              </li>
-            ))}
+            {players.map((p) => {
+              const presence = getPresence(p);
+              let status = '';
+              if (!p.connected) status = ' (away)';
+              else if (room.status === 'playing' && presence === 'playing') status = ' (playing)';
+              else status = ' (lobby)';
+              return (
+                <li key={p.id}>
+                  {p.name}
+                  {p.id === room.hostId ? ' 👑' : ''}
+                  {p.id === player.id ? ' (you)' : ''}
+                  {status}
+                </li>
+              );
+            })}
           </ul>
 
           <div style={{ height: 14 }} />
           <p className="h3">Game</p>
-          {isHost ? (
+          {room.status === 'playing' ? (
+            <p style={{ fontWeight: 800, marginTop: 8 }}>
+              {game?.emoji} {game?.title ?? room.gameId} — in progress
+            </p>
+          ) : isHost ? (
             <select
               className="field"
               value={room.gameId}
@@ -168,7 +192,11 @@ export function RoomSession({ code, onHome, onBrowseGames }: Props) {
           )}
 
           <div style={{ height: 14 }} />
-          {isHost ? (
+          {room.status === 'playing' ? (
+            <Button variant="sky" block onClick={onBrowseGames}>
+              Browse games
+            </Button>
+          ) : isHost ? (
             <Button
               variant="primary"
               block
@@ -184,13 +212,16 @@ export function RoomSession({ code, onHome, onBrowseGames }: Props) {
           ) : (
             <p className="muted">Waiting for host to start…</p>
           )}
-          {isHost && game?.modes.includes('turn') && players.filter((p) => p.connected).length < 2 ? (
+          {room.status === 'lobby' &&
+          isHost &&
+          game?.modes.includes('turn') &&
+          players.filter((p) => p.connected).length < 2 ? (
             <p className="muted" style={{ marginTop: 8 }}>
               Need 2 connected players for this game.
             </p>
           ) : null}
 
-          {isHost ? (
+          {room.status === 'lobby' && isHost ? (
             <>
               <div style={{ height: 10 }} />
               <Button variant="sky" block onClick={onBrowseGames}>
@@ -214,7 +245,6 @@ export function RoomSession({ code, onHome, onBrowseGames }: Props) {
           setRoomGame(room.code, room.gameId).catch((err) => setError(String(err)))
         }
         onBrowseGames={onBrowseGames}
-        onHome={onHome}
       />
     );
   }
@@ -223,7 +253,7 @@ export function RoomSession({ code, onHome, onBrowseGames }: Props) {
     return (
       <Panel>
         <p>Unknown game.</p>
-        <Button onClick={onHome}>Home</Button>
+        <Button onClick={onBrowseGames}>Games</Button>
       </Panel>
     );
   }
@@ -235,7 +265,7 @@ export function RoomSession({ code, onHome, onBrowseGames }: Props) {
       player={player}
       players={players.map((p) => ({ id: p.id, name: p.name }))}
       onError={setError}
-      onHome={onHome}
+      onQuitGame={onQuitGame}
     />
   );
 }
@@ -247,7 +277,6 @@ function ResultsRoom({
   onRematch,
   onPickGame,
   onBrowseGames,
-  onHome,
 }: {
   room: RoomData;
   playerId: string;
@@ -255,7 +284,6 @@ function ResultsRoom({
   onRematch: () => void;
   onPickGame: () => void;
   onBrowseGames: () => void;
-  onHome: () => void;
 }) {
   const game = getGame(room.gameId);
   const players = playersList(room).map((p) => ({ id: p.id, name: p.name }));
@@ -297,8 +325,8 @@ function ResultsRoom({
           <p className="muted">Waiting for host to pick the next game…</p>
         )}
         <div style={{ height: 8 }} />
-        <Button variant="ghost" block onClick={onHome}>
-          Home (stay in party)
+        <Button variant="ghost" block onClick={onBrowseGames}>
+          Games (stay in party)
         </Button>
       </Panel>
     </div>
@@ -311,7 +339,7 @@ function RoomPlay({
   player,
   players,
   onError,
-  onHome,
+  onQuitGame,
 }: {
   room: RoomData;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -319,7 +347,7 @@ function RoomPlay({
   player: { id: string; name: string };
   players: { id: string; name: string }[];
   onError: (e: string) => void;
-  onHome: () => void;
+  onQuitGame: () => void;
 }) {
   const initialState = useMemo(
     () => game.createInitialState(room.seed, players),
@@ -394,8 +422,8 @@ function RoomPlay({
         <h2 className="h2" style={{ flex: 1, color: 'var(--gold)', fontSize: '1.3rem' }}>
           {game.emoji} {game.title}
         </h2>
-        <Button variant="ghost" onClick={onHome}>
-          Home
+        <Button variant="ghost" onClick={onQuitGame}>
+          Quit game
         </Button>
       </div>
       <Panel>

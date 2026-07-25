@@ -7,14 +7,14 @@ import './Home.css';
 type Props = {
   onPlay: () => void;
   activeRoom?: string | null;
-  onReturnToRoom?: () => void;
+  onLobby?: () => void;
   onQuitMultiplayer?: () => void;
 };
 
 export function Home({
   onPlay,
   activeRoom,
-  onReturnToRoom,
+  onLobby,
   onQuitMultiplayer,
 }: Props) {
   const [nick, setNick] = useState(() => ensureNickname());
@@ -37,15 +37,30 @@ export function Home({
         <Panel className="party-panel">
           <p className="h3">Party linked</p>
           <p className="muted" style={{ margin: '4px 0 10px' }}>
-            You&apos;re still in room <strong>{activeRoom}</strong> with your friends.
+            You&apos;re still in room <strong>{activeRoom}</strong>. Open games to see who&apos;s
+            playing or in the lobby.
           </p>
           <div className="stack">
-            <Button variant="primary" block onClick={onReturnToRoom}>
-              Back to room
+            <Button
+              variant="primary"
+              block
+              onClick={() => {
+                setNickname(nick);
+                onPlay();
+              }}
+            >
+              Browse games
             </Button>
-            <Button variant="ghost" block onClick={onQuitMultiplayer}>
-              Quit multiplayer
-            </Button>
+            {onLobby ? (
+              <Button variant="sky" block onClick={onLobby}>
+                Lobby
+              </Button>
+            ) : null}
+            {onQuitMultiplayer ? (
+              <Button variant="ghost" block onClick={onQuitMultiplayer}>
+                Quit multiplayer
+              </Button>
+            ) : null}
           </div>
         </Panel>
       ) : null}
@@ -67,17 +82,21 @@ export function Home({
             />
           </div>
         </label>
-        <div style={{ height: 12 }} />
-        <Button
-          variant={activeRoom ? 'sky' : 'primary'}
-          block
-          onClick={() => {
-            setNickname(nick);
-            onPlay();
-          }}
-        >
-          {activeRoom ? 'Browse games' : "Let's Play!"}
-        </Button>
+        {!activeRoom ? (
+          <>
+            <div style={{ height: 12 }} />
+            <Button
+              variant="primary"
+              block
+              onClick={() => {
+                setNickname(nick);
+                onPlay();
+              }}
+            >
+              Let&apos;s Play!
+            </Button>
+          </>
+        ) : null}
       </Panel>
     </div>
   );

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { GAMES } from '../games/registry';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
+import { PartyLinked } from './PartyLinked';
 import './Library.css';
 
 type Props = {
@@ -10,7 +11,8 @@ type Props = {
   onCreateRoom: (gameId: string) => void;
   onJoinRoom: (code: string) => void;
   activeRoom?: string | null;
-  onReturnToRoom?: () => void;
+  onLobby?: () => void;
+  onQuitMultiplayer?: () => void;
   onPlayInRoom?: (gameId: string) => void;
 };
 
@@ -20,7 +22,8 @@ export function Library({
   onCreateRoom,
   onJoinRoom,
   activeRoom,
-  onReturnToRoom,
+  onLobby,
+  onQuitMultiplayer,
   onPlayInRoom,
 }: Props) {
   const [code, setCode] = useState('');
@@ -35,16 +38,12 @@ export function Library({
         </Button>
       </div>
 
-      {activeRoom ? (
-        <Panel className="join-panel" style={{ marginBottom: 12 }}>
-          <p className="h3">Party room {activeRoom}</p>
-          <p className="muted" style={{ margin: '4px 0 10px' }}>
-            Pick a game below, then play together — you stay linked until you quit.
-          </p>
-          <Button variant="primary" block onClick={onReturnToRoom}>
-            Open room lobby
-          </Button>
-        </Panel>
+      {activeRoom && onLobby && onQuitMultiplayer ? (
+        <PartyLinked
+          code={activeRoom}
+          onLobby={onLobby}
+          onQuitMultiplayer={onQuitMultiplayer}
+        />
       ) : null}
 
       <div className="game-grid">
