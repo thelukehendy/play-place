@@ -64,8 +64,14 @@ export function RoomSession({ code, onBrowseGames, onQuitGame }: Props) {
   const game = getGame(room.gameId);
   const me = room.players?.[player.id];
   const myPresence = me ? getPresence(me) : 'lobby';
+  // Only stay out of a live match after an explicit Quit game (presence lobby + finished).
+  // Do not use presence alone — startMatch used to race status ahead of presence.
+  const optedOutOfMatch =
+    room.status === 'playing' &&
+    myPresence === 'lobby' &&
+    !!room.finished?.[player.id];
 
-  if (room.status === 'lobby' || (room.status === 'playing' && myPresence === 'lobby')) {
+  if (room.status === 'lobby' || optedOutOfMatch) {
     return (
       <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
         <div className="row" style={{ color: 'var(--cream)', textShadow: '1px 1px 0 var(--ink)' }}>

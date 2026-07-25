@@ -168,29 +168,6 @@ export function getPresence(player: RoomPlayer): PlayerPresence {
   return player.presence === 'playing' ? 'playing' : 'lobby';
 }
 
-async function setAllPresence(code: string, presence: PlayerPresence) {
-  const normalized = code.trim().toUpperCase();
-  if (!isFirebaseConfigured()) {
-    const store = readLocal();
-    const room = store[normalized];
-    if (!room) return;
-    for (const p of Object.values(room.players)) {
-      p.presence = presence;
-    }
-    writeLocal(store);
-    return;
-  }
-  const { db } = getFirebase();
-  const snap = await get(ref(db, `rooms/${normalized}/players`));
-  if (!snap.exists()) return;
-  const players = snap.val() as Record<string, RoomPlayer>;
-  const updates: Record<string, PlayerPresence> = {};
-  for (const id of Object.keys(players)) {
-    updates[`players/${id}/presence`] = presence;
-  }
-  await update(ref(db, `rooms/${normalized}`), updates);
-}
-
 export async function setPlayerPresence(
   code: string,
   playerId: string,
@@ -210,20 +187,75 @@ export async function setPlayerPresence(
 }
 
 export async function setRoomGame(code: string, gameId: string) {
-  await patchRoom(code, { gameId, status: 'lobby', scores: {}, finished: {}, gameState: null });
-  await setAllPresence(code, 'lobby');
+  const normalized = code.trim().toUpperCase();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    room.gameId = gameId;
+    room.status = 'lobby';
+    room.scores = {};
+    room.finished = {};
+    room.gameState = null;
+    for (const p of Object.values(room.players)) {
+      p.presence = 'lobby';
+    }
+    writeLocal(store);
+    return;
+  }
+
+  const { db } = getFirebase();
+  const snap = await get(ref(db, `rooms/${normalized}/players`));
+  const players = (snap.exists() ? snap.val() : {}) as Record<string, RoomPlayer>;
+  const updates: Record<string, unknown> = {
+    gameId,
+    status: 'lobby',
+    scores: {},
+    finished: {},
+    gameState: null,
+  };
+  for (const id of Object.keys(players)) {
+    updates[`players/${id}/presence`] = 'lobby';
+  }
+  await update(ref(db, `rooms/${normalized}`), updates);
 }
 
 export async function startMatch(code: string, seed?: number) {
-  await patchRoom(code, {
+  const normalized = code.trim().toUpperCase();
+  const nextSeed = seed ?? randomSeed();
+
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    room.status = 'playing';
+    room.seed = nextSeed;
+    room.scores = {};
+    room.finished = {};
+    room.gameState = null;
+    room.winnerId = null;
+    for (const p of Object.values(room.players)) {
+      p.presence = 'playing';
+    }
+    writeLocal(store);
+    return;
+  }
+
+  const { db } = getFirebase();
+  const snap = await get(ref(db, `rooms/${normalized}/players`));
+  const players = (snap.exists() ? snap.val() : {}) as Record<string, RoomPlayer>;
+  const updates: Record<string, unknown> = {
     status: 'playing',
-    seed: seed ?? randomSeed(),
+    seed: nextSeed,
     scores: {},
     finished: {},
     gameState: null,
     winnerId: null,
-  });
-  await setAllPresence(code, 'playing');
+  };
+  for (const id of Object.keys(players)) {
+    updates[`players/${id}/presence`] = 'playing';
+  }
+  await update(ref(db, `rooms/${normalized}`), updates);
 }
 
 export async function rematch(code: string) {
