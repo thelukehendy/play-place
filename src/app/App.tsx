@@ -4,7 +4,15 @@ import { Library } from './Library';
 import { SoloPlay } from './SoloPlay';
 import { RoomSession } from './RoomSession';
 import { Results } from './Results';
-import { createRoom, joinRoom, leaveRoom, quitMatch, setRoomGame } from '../multiplayer/rooms';
+import {
+  createRoom,
+  getPresence,
+  joinRoom,
+  leaveRoom,
+  quitMatch,
+  setRoomGame,
+  subscribeRoom,
+} from '../multiplayer/rooms';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import type { GameFinishPayload } from '../games/types';
 import { Panel } from '../ui/Panel';
@@ -44,6 +52,7 @@ export function App() {
   const [roomCode, setRoomCode] = useState<string | null>(
     () => readRoomFromUrl() ?? readStoredRoom(),
   );
+  const [matchKey, setMatchKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -61,6 +70,7 @@ export function App() {
 
   const clearRoomBinding = useCallback(() => {
     setRoomCode(null);
+    setMatchKey('');
     localStorage.removeItem(ACTIVE_ROOM_KEY);
     const url = new URL(window.location.href);
     url.searchParams.delete('room');
@@ -95,6 +105,31 @@ export function App() {
     // only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep every linked device on the live match whenever a game starts —
+  // even if they were on Home, Library, Solo, etc.
+  useEffect(() => {
+    if (!roomCode) return;
+    const playerId = getOrCreatePlayerId();
+    return subscribeRoom(roomCode, (room) => {
+      if (!room) return;
+
+      if (room.status === 'playing') {
+        const me = room.players?.[playerId];
+        const optedOut =
+          !!me && getPresence(me) === 'lobby' && !!room.finished?.[playerId];
+        if (optedOut) return;
+        setMatchKey(`${room.gameId}:${room.seed}`);
+        setScreen((current) => (current.name === 'room' ? current : { name: 'room' }));
+        return;
+      }
+
+      if (room.status === 'results') {
+        setMatchKey(`${room.gameId}:${room.seed}:results`);
+        setScreen((current) => (current.name === 'room' ? current : { name: 'room' }));
+      }
+    });
+  }, [roomCode]);
 
   const handleCreate = async (gameId: string) => {
     setBusy(true);
@@ -238,6 +273,7 @@ export function App() {
 
       {screen.name === 'room' && roomCode ? (
         <RoomSession
+          key={matchKey || roomCode}
           code={roomCode}
           onBrowseGames={goLibrary}
           onQuitGame={quitGame}
