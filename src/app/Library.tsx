@@ -11,7 +11,6 @@ type Props = {
   onJoinRoom: (code: string) => void;
   activeRoom?: string | null;
   onReturnToRoom?: () => void;
-  /** Host (or any member): set this game on the shared room and open lobby */
   onPlayInRoom?: (gameId: string) => void;
 };
 
@@ -73,6 +72,9 @@ export function Library({
             {GAMES.find((g) => g.id === picked)?.blurb}
           </p>
           <div className="stack">
+            <Button variant="gold" block onClick={() => onSolo(picked)}>
+              Play Solo
+            </Button>
             {activeRoom && onPlayInRoom ? (
               <Button
                 variant="primary"
@@ -89,35 +91,48 @@ export function Library({
                 Create Room
               </Button>
             )}
-            <Button variant="gold" block onClick={() => onSolo(picked)}>
-              Play Solo
-            </Button>
             <Button variant="ghost" block onClick={() => setPicked(null)}>
               Cancel
             </Button>
           </div>
         </Panel>
-      ) : !activeRoom ? (
+      ) : null}
+
+      {!activeRoom && !picked ? (
         <Panel className="join-panel">
-          <p className="h3">Join a room</p>
-          <p className="muted" style={{ margin: '4px 0 10px' }}>
-            Got a code from a friend?
+          <p className="h3">Multiplayer</p>
+          <p className="muted" style={{ margin: '4px 0 12px' }}>
+            Create a room for any game above, or join a friend&apos;s code.
           </p>
-          <div className="join-row">
-            <input
-              className="field"
-              placeholder="CODE"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-            />
+          <div className="stack">
             <Button
-              variant="green"
-              disabled={code.trim().length < 4}
-              onClick={() => onJoinRoom(code.trim())}
+              variant="sky"
+              block
+              onClick={() => onCreateRoom('number-rush')}
             >
-              Join
+              Create room
             </Button>
+            <div className="join-row">
+              <input
+                className="field"
+                placeholder="CODE"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && code.trim().length >= 4) {
+                    onJoinRoom(code.trim());
+                  }
+                }}
+              />
+              <Button
+                variant="green"
+                disabled={code.trim().length < 4}
+                onClick={() => onJoinRoom(code.trim())}
+              >
+                Join
+              </Button>
+            </div>
           </div>
         </Panel>
       ) : null}
