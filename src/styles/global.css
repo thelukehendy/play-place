@@ -1,0 +1,251 @@
+:root {
+  --red: #e52521;
+  --red-dark: #b71c1c;
+  --sky: #049cd8;
+  --sky-deep: #0277a8;
+  --green: #43b047;
+  --green-dark: #2e7d32;
+  --gold: #f5c518;
+  --gold-dark: #d4a017;
+  --brick: #8b5a2b;
+  --brick-light: #c48a4a;
+  --cream: #fff8e7;
+  --ink: #1a1a2e;
+  --cloud: #ffffff;
+  --shadow: rgba(26, 26, 46, 0.25);
+
+  --font-display: 'Baloo 2', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --tap: 48px;
+
+  --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -10%, #7ed6ff 0%, transparent 55%),
+    linear-gradient(180deg, #049cd8 0%, #43b047 55%, #2e7d32 100%);
+  background-attachment: fixed;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overflow-x: hidden;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+a {
+  color: inherit;
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 197, 24, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(245, 197, 24, 0);
+  }
+}
+
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(12px + var(--safe-top)) 14px calc(16px + var(--safe-bottom));
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.panel {
+  background: var(--cream);
+  border: 4px solid var(--ink);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 6px 0 var(--shadow);
+  padding: 16px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 3px solid var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 0 var(--ink);
+  transition: transform 0.12s var(--bounce), box-shadow 0.12s ease;
+  user-select: none;
+}
+
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.btn-primary {
+  background: var(--red);
+  color: var(--cloud);
+}
+
+.btn-sky {
+  background: var(--sky);
+  color: var(--cloud);
+}
+
+.btn-green {
+  background: var(--green);
+  color: var(--cloud);
+}
+
+.btn-gold {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.btn-ghost {
+  background: var(--cloud);
+  color: var(--ink);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.field {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--cloud);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.field:focus {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 10vw, 3.4rem);
+  line-height: 0.95;
+  margin: 0;
+  letter-spacing: 0.01em;
+  text-shadow: 3px 3px 0 var(--ink);
+  color: var(--gold);
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+}
+
+.h2 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.6rem;
+  margin: 0 0 8px;
+}
+
+.h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.muted {
+  opacity: 0.75;
+  font-weight: 700;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spacer {
+  flex: 1;
+}

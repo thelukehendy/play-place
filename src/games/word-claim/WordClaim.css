@@ -1,0 +1,89 @@
+.wc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.wc-letter {
+  aspect-ratio: 1;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.4rem;
+  background: var(--gold);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.wc-letter.on {
+  background: var(--sky);
+  color: var(--cloud);
+}
+
+.wc-letter.used {
+  opacity: 0.35;
+}
+
+.wc-word {
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  min-height: 2rem;
+  margin: 0 0 10px;
+  transition: color 0.15s, transform 0.15s var(--bounce);
+}
+
+.wc-word.ok {
+  color: var(--green-dark);
+  transform: scale(1.06);
+}
+
+.wc-word.bad {
+  color: var(--red);
+  animation: wiggle 0.35s ease;
+}
+
+.wc-flash {
+  text-align: center;
+  font-weight: 800;
+  font-size: 1rem;
+  min-height: 1.4rem;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  padding: 6px 12px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.wc-flash.ok {
+  background: #c8f0c8;
+  color: var(--green-dark);
+  border: 2px solid var(--green-dark);
+  animation: pop-in 0.25s var(--bounce);
+}
+
+.wc-flash.bad {
+  background: #ffd0d0;
+  color: var(--red-dark);
+  border: 2px solid var(--red);
+  animation: wiggle 0.35s ease;
+}
+
+
+.wc-found {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.wc-chip {
+  background: var(--cloud);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 800;
+  font-size: 0.85rem;
+}

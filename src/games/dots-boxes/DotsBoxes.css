@@ -1,0 +1,80 @@
+.dab-board {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 320px;
+  margin: 0 auto;
+  user-select: none;
+}
+
+.dab-row {
+  display: flex;
+  align-items: center;
+}
+
+.dab-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.dab-h {
+  flex: 1;
+  height: 14px;
+  background: #ddd;
+  border: none;
+  margin: 0 -1px;
+  border-radius: 4px;
+}
+
+.dab-v {
+  width: 14px;
+  height: 48px;
+  background: #ddd;
+  border: none;
+  border-radius: 4px;
+  margin: -1px 0;
+}
+
+.dab-h.on,
+.dab-v.on {
+  background: var(--sky);
+}
+
+.dab-h.p1,
+.dab-v.p1 {
+  background: var(--red);
+}
+
+.dab-h.p2,
+.dab-v.p2 {
+  background: var(--green);
+}
+
+.dab-box {
+  flex: 1;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.dab-box.p1 {
+  background: rgba(229, 37, 33, 0.25);
+  color: var(--red-dark);
+}
+
+.dab-box.p2 {
+  background: rgba(67, 176, 71, 0.25);
+  color: var(--green-dark);
+}
+
+.dab-turn {
+  text-align: center;
+  font-weight: 800;
+  margin-bottom: 10px;
+}

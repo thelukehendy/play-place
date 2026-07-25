@@ -1,0 +1,103 @@
+.game-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.game-hud .stat {
+  background: var(--cloud);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.game-rules {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin: 0 0 12px;
+  opacity: 0.8;
+}
+
+.scoreboard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.scoreboard-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+
+.score-row {
+  background: var(--cloud);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-weight: 800;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s var(--bounce);
+}
+
+.score-row.you {
+  border-color: var(--gold-dark);
+  background: #fff3c4;
+}
+
+.score-row.done {
+  border-color: var(--green-dark);
+  background: #d8f5d8;
+}
+
+.score-row.flash {
+  transform: scale(1.02);
+  box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.55);
+}
+
+.score-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.score-name {
+  font-size: 0.95rem;
+}
+
+.score-status {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  text-align: right;
+}
+
+.score-bar {
+  margin-top: 6px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(26, 26, 46, 0.12);
+  overflow: hidden;
+  border: 1px solid rgba(26, 26, 46, 0.2);
+}
+
+.score-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--sky), var(--green));
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+.score-row.you .score-bar-fill {
+  background: linear-gradient(90deg, var(--gold), var(--red));
+}
+
+.score-row.done .score-bar-fill {
+  background: var(--green);
+}

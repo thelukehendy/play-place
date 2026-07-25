@@ -1,0 +1,35 @@
+.nr-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.nr-cell {
+  aspect-ratio: 1;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.25rem;
+  background: var(--gold);
+  box-shadow: 0 3px 0 var(--ink);
+  color: var(--ink);
+  transition: transform 0.1s var(--bounce), background 0.15s;
+}
+
+.nr-cell:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.nr-cell.done {
+  background: var(--green);
+  color: var(--cloud);
+  opacity: 0.55;
+}
+
+.nr-cell.next {
+  animation: pulse-glow 1.2s ease infinite;
+  background: var(--red);
+  color: var(--cloud);
+}

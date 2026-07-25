@@ -1,0 +1,116 @@
+.pipe-grid {
+  display: grid;
+  gap: 8px;
+  max-width: 340px;
+  margin: 0 auto;
+}
+
+.pipe-cell {
+  aspect-ratio: 1;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: #c48a4a;
+  box-shadow: 0 3px 0 var(--ink);
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transition: transform 0.12s var(--bounce), background 0.15s;
+}
+
+.pipe-cell:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.pipe-cell.flow {
+  background: #5ec8f0;
+}
+
+.pipe-cell.start {
+  background: var(--green);
+}
+
+.pipe-cell.end {
+  background: var(--gold);
+}
+
+.pipe-cell.start.flow,
+.pipe-cell.end.flow {
+  box-shadow: 0 3px 0 var(--ink), 0 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+.pipe-label {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.75rem;
+  color: var(--ink);
+  opacity: 0.85;
+}
+
+.pipe-glyph {
+  position: relative;
+  width: 70%;
+  height: 70%;
+}
+
+.pipe-glyph .hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34%;
+  height: 34%;
+  transform: translate(-50%, -50%);
+  background: #3d2a14;
+  border-radius: 4px;
+  z-index: 2;
+}
+
+.pipe-glyph.on .hub,
+.pipe-glyph.on .arm.open {
+  background: #0277a8;
+}
+
+.pipe-glyph .arm {
+  position: absolute;
+  background: transparent;
+  z-index: 1;
+}
+
+.pipe-glyph .arm.open {
+  background: #3d2a14;
+}
+
+.pipe-glyph .arm.n {
+  left: 33%;
+  top: 0;
+  width: 34%;
+  height: 55%;
+  border-radius: 4px 4px 0 0;
+}
+
+.pipe-glyph .arm.s {
+  left: 33%;
+  bottom: 0;
+  width: 34%;
+  height: 55%;
+  border-radius: 0 0 4px 4px;
+}
+
+.pipe-glyph .arm.e {
+  top: 33%;
+  right: 0;
+  width: 55%;
+  height: 34%;
+  border-radius: 0 4px 4px 0;
+}
+
+.pipe-glyph .arm.w {
+  top: 33%;
+  left: 0;
+  width: 55%;
+  height: 34%;
+  border-radius: 4px 0 0 4px;
+}

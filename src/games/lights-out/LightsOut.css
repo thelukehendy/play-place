@@ -1,0 +1,25 @@
+.lo-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.lo-cell {
+  aspect-ratio: 1;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: #2a2a40;
+  box-shadow: 0 3px 0 var(--ink);
+  transition: background 0.15s, transform 0.1s var(--bounce);
+}
+
+.lo-cell.on {
+  background: var(--gold);
+  box-shadow: 0 3px 0 var(--ink), 0 0 12px rgba(245, 197, 24, 0.6);
+}
+
+.lo-cell:active:not(:disabled) {
+  transform: scale(0.95);
+}

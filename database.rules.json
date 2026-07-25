@@ -1,0 +1,16 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$code": {
+        ".read": true,
+        ".write": true,
+        ".validate": "newData.hasChildren(['code', 'hostId', 'gameId', 'status', 'seed', 'createdAt'])",
+        "status": {
+          ".validate": "newData.isString() && (newData.val() === 'lobby' || newData.val() === 'playing' || newData.val() === 'results')"
+        }
+      }
+    }
+  }
+}

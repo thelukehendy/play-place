@@ -1,0 +1,32 @@
+.flood-grid {
+  display: grid;
+  gap: 4px;
+  max-width: 340px;
+  margin: 0 auto 12px;
+}
+
+.flood-cell {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+}
+
+.flood-palette {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.flood-swatch {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.flood-swatch:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}

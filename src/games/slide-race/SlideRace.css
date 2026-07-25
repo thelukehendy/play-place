@@ -1,0 +1,64 @@
+.slide-board {
+  --n: 4;
+  --gap: 8px;
+  position: relative;
+  width: min(100%, 360px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  touch-action: manipulation;
+}
+
+.slide-empty,
+.slide-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc((100% - (var(--n) - 1) * var(--gap)) / var(--n));
+  height: calc((100% - (var(--n) - 1) * var(--gap)) / var(--n));
+  box-sizing: border-box;
+  /* 100% in translate = this element's size; add gap for each step */
+  transform: translate(
+    calc(var(--c) * (100% + var(--gap))),
+    calc(var(--r) * (100% + var(--gap)))
+  );
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slide-empty {
+  border: 3px dashed rgba(26, 26, 46, 0.35);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.28);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.slide-tile {
+  z-index: 1;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.5rem;
+  background: var(--sky);
+  color: var(--cloud);
+  box-shadow: 0 3px 0 var(--ink);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  margin: 0;
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.12s ease;
+}
+
+.slide-tile.can-move {
+  cursor: pointer;
+}
+
+.slide-tile.can-move:active {
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.slide-tile:disabled {
+  cursor: default;
+}

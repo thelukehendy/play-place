@@ -1,0 +1,33 @@
+.mem-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.mem-card {
+  aspect-ratio: 1;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-sm);
+  font-size: 1.6rem;
+  background: var(--red);
+  color: var(--cloud);
+  box-shadow: 0 3px 0 var(--ink);
+  transition: transform 0.15s var(--bounce), background 0.15s;
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+
+.mem-card.face {
+  background: var(--cream);
+  color: var(--ink);
+}
+
+.mem-card.matched {
+  background: var(--green);
+  color: var(--cloud);
+  opacity: 0.7;
+}
+
+.mem-card:disabled {
+  cursor: default;
+}
