@@ -1,16 +1,24 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, signInAnonymously, type Auth } from 'firebase/auth';
 import { getDatabase, type Database } from 'firebase/database';
+import { FIREBASE_WEB_CONFIG } from './firebaseConfig';
+
+function envOr(fallback: string, key: string): string {
+  const fromEnv = String((import.meta.env as Record<string, string | undefined>)[key] ?? '').trim();
+  return fromEnv || fallback;
+}
 
 const config = {
-  apiKey: String(import.meta.env.VITE_FIREBASE_API_KEY ?? '').trim() || undefined,
-  authDomain: String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? '').trim() || undefined,
-  databaseURL: String(import.meta.env.VITE_FIREBASE_DATABASE_URL ?? '').trim() || undefined,
-  projectId: String(import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '').trim() || undefined,
-  storageBucket: String(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? '').trim() || undefined,
-  messagingSenderId:
-    String(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? '').trim() || undefined,
-  appId: String(import.meta.env.VITE_FIREBASE_APP_ID ?? '').trim() || undefined,
+  apiKey: envOr(FIREBASE_WEB_CONFIG.apiKey, 'VITE_FIREBASE_API_KEY'),
+  authDomain: envOr(FIREBASE_WEB_CONFIG.authDomain, 'VITE_FIREBASE_AUTH_DOMAIN'),
+  databaseURL: envOr(FIREBASE_WEB_CONFIG.databaseURL, 'VITE_FIREBASE_DATABASE_URL'),
+  projectId: envOr(FIREBASE_WEB_CONFIG.projectId, 'VITE_FIREBASE_PROJECT_ID'),
+  storageBucket: envOr(FIREBASE_WEB_CONFIG.storageBucket, 'VITE_FIREBASE_STORAGE_BUCKET'),
+  messagingSenderId: envOr(
+    FIREBASE_WEB_CONFIG.messagingSenderId,
+    'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  ),
+  appId: envOr(FIREBASE_WEB_CONFIG.appId, 'VITE_FIREBASE_APP_ID'),
 };
 
 export function isFirebaseConfigured(): boolean {
@@ -23,7 +31,7 @@ let db: Database | null = null;
 
 export function getFirebase() {
   if (!isFirebaseConfigured()) {
-    throw new Error('Firebase is not configured. Add keys to .env.local — see README.');
+    throw new Error('Firebase is not configured.');
   }
   if (!app) {
     app = initializeApp(config);

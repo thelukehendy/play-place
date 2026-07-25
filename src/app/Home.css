@@ -91,3 +91,20 @@
   border-color: var(--gold-dark);
   background: #fff6d0;
 }
+
+.home-multi {
+  animation: pop-in 0.4s var(--bounce);
+}
+
+.home .join-row {
+  display: flex;
+  gap: 8px;
+}
+
+.home .join-row .field {
+  flex: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 800;
+  text-align: center;
+}

@@ -184,6 +184,9 @@ export function App() {
           activeRoom={roomCode}
           onReturnToRoom={() => setScreen({ name: 'room' })}
           onQuitMultiplayer={quitMultiplayer}
+          onCreateRoom={() => handleCreate('number-rush')}
+          onJoinRoom={handleJoin}
+          busy={busy}
         />
       ) : null}
 

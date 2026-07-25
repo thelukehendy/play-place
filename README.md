@@ -19,15 +19,19 @@ Bright toybox / playground vibes (Mario-inspired colors — no Nintendo characte
 
 ## Live site
 
-After GitHub Pages deploy:
-
-`https://<your-github-username>.github.io/play-place/`
+Play here: https://thelukehendy.github.io/play-place/
 
 Invite links look like:
 
-`https://<your-github-username>.github.io/play-place/?room=ABCDE`
+`https://thelukehendy.github.io/play-place/?room=ABCDE`
 
 Opening that URL joins the room automatically.
+
+### Firebase Auth domain (required for multiplayer)
+
+In Firebase Console → Authentication → Settings → **Authorized domains**, add:
+
+`thelukehendy.github.io`
 
 
 ```bash
