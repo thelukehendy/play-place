@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import {
   chatList,
@@ -14,9 +23,59 @@ import './PartyChat.css';
 const TOAST_MS = 2500;
 const NUDGE_TOAST_MS = 2500;
 
-type Props = {
-  code: string;
+type ChatCtx = {
+  openChat: () => void;
+  enabled: boolean;
 };
+
+const PartyChatContext = createContext<ChatCtx>({
+  openChat: () => undefined,
+  enabled: false,
+});
+
+export function usePartyChat() {
+  return useContext(PartyChatContext);
+}
+
+/** In-flow Chat control for headers — never fixed/overlapping. */
+export function ChatButton() {
+  const { openChat, enabled } = usePartyChat();
+  if (!enabled) return null;
+  return (
+    <Button
+      variant="gold"
+      className="chat-header-btn"
+      onClick={() => {
+        sfxTap();
+        openChat();
+      }}
+      aria-label="Open party chat"
+    >
+      Chat
+    </Button>
+  );
+}
+
+/**
+ * Three-slot header: title | Chat (party only) | action.
+ * Keeps Chat in document flow so it cannot cover Games/Quit/etc.
+ */
+export function ScreenHeader({
+  title,
+  action,
+}: {
+  title: ReactNode;
+  action?: ReactNode;
+}) {
+  const { enabled } = usePartyChat();
+  return (
+    <header className={`screen-header${enabled ? ' screen-header--party' : ''}`}>
+      <div className="screen-header-side screen-header-left">{title}</div>
+      <div className="screen-header-center">{enabled ? <ChatButton /> : null}</div>
+      <div className="screen-header-side screen-header-right">{action}</div>
+    </header>
+  );
+}
 
 function useVisibleFrame(active: boolean) {
   const [frame, setFrame] = useState(() => ({
@@ -28,11 +87,8 @@ function useVisibleFrame(active: boolean) {
     if (!active) return;
     const sync = () => {
       const vv = window.visualViewport;
-      if (vv) {
-        setFrame({ top: vv.offsetTop, height: vv.height });
-      } else {
-        setFrame({ top: 0, height: window.innerHeight });
-      }
+      if (vv) setFrame({ top: vv.offsetTop, height: vv.height });
+      else setFrame({ top: 0, height: window.innerHeight });
     };
     sync();
     const vv = window.visualViewport;
@@ -49,7 +105,12 @@ function useVisibleFrame(active: boolean) {
   return frame;
 }
 
-export function PartyChatChrome({ code }: Props) {
+type ProviderProps = {
+  code: string | null;
+  children: ReactNode;
+};
+
+export function PartyChatProvider({ code, children }: ProviderProps) {
   const [room, setRoom] = useState<RoomData | null>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -65,6 +126,11 @@ export function PartyChatChrome({ code }: Props) {
   );
 
   useEffect(() => {
+    if (!code) {
+      setRoom(null);
+      setOpen(false);
+      return;
+    }
     bootstrapped.current = false;
     seen.current = new Set();
     setToasts([]);
@@ -72,9 +138,10 @@ export function PartyChatChrome({ code }: Props) {
     return () => unsub();
   }, [code]);
 
-  const messages = room ? chatList(room) : [];
+  const messages = room && code ? chatList(room) : [];
 
   useEffect(() => {
+    if (!code) return;
     if (!messages.length) {
       bootstrapped.current = true;
       return;
@@ -94,13 +161,12 @@ export function PartyChatChrome({ code }: Props) {
         setToasts((t) => t.filter((x) => x.id !== m.id));
       }, TOAST_MS);
     });
-  }, [messages, player.id]);
+  }, [messages, player.id, code]);
 
   useEffect(() => {
     if (!open) return;
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-    // Focus after layout so the sheet is on-screen above the keyboard.
     const t = window.setTimeout(() => inputRef.current?.focus(), 50);
     return () => clearTimeout(t);
   }, [open, messages.length]);
@@ -108,7 +174,7 @@ export function PartyChatChrome({ code }: Props) {
   const myNudgeAt = room?.nudges?.[player.id]?.at;
   const myNudgeFrom = room?.nudges?.[player.id]?.fromName;
   useEffect(() => {
-    if (!myNudgeAt || !myNudgeFrom) return;
+    if (!code || !myNudgeAt || !myNudgeFrom) return;
     const id = `nudge-${myNudgeAt}`;
     if (seen.current.has(id)) return;
     seen.current.add(id);
@@ -127,9 +193,16 @@ export function PartyChatChrome({ code }: Props) {
     window.setTimeout(() => {
       setToasts((t) => t.filter((x) => x.id !== id));
     }, NUDGE_TOAST_MS);
-  }, [myNudgeAt, myNudgeFrom]);
+  }, [myNudgeAt, myNudgeFrom, code]);
+
+  const openChat = useCallback(() => setOpen(true), []);
+  const ctx = useMemo(
+    () => ({ openChat, enabled: !!code }),
+    [openChat, code],
+  );
 
   const send = async () => {
+    if (!code) return;
     const text = draft.trim();
     if (!text) return;
     setDraft('');
@@ -142,30 +215,20 @@ export function PartyChatChrome({ code }: Props) {
   };
 
   return (
-    <>
-      <div className="chat-toasts" aria-live="polite">
-        {toasts.map((m) => (
-          <div key={m.id} className="chat-toast">
-            <strong>{m.fromName}</strong>: {m.text}
-          </div>
-        ))}
-      </div>
+    <PartyChatContext.Provider value={ctx}>
+      {children}
 
-      {!open ? (
-        <button
-          type="button"
-          className="chat-fab"
-          onClick={() => {
-            sfxTap();
-            setOpen(true);
-          }}
-          aria-label="Open party chat"
-        >
-          Chat
-        </button>
+      {code ? (
+        <div className="chat-toasts" aria-live="polite">
+          {toasts.map((m) => (
+            <div key={m.id} className="chat-toast">
+              <strong>{m.fromName}</strong>: {m.text}
+            </div>
+          ))}
+        </div>
       ) : null}
 
-      {open ? (
+      {code && open ? (
         <div
           className="chat-overlay"
           role="dialog"
@@ -229,6 +292,6 @@ export function PartyChatChrome({ code }: Props) {
           </div>
         </div>
       ) : null}
-    </>
+    </PartyChatContext.Provider>
   );
 }

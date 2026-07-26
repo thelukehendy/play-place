@@ -1,6 +1,7 @@
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
 import type { GameFinishPayload } from '../games/types';
+import { ScreenHeader } from './PartyChat';
 
 type Props = {
   title: string;
@@ -19,19 +20,26 @@ export function Results({ title, payload, onAgain, onLibrary }: Props) {
         animation: 'pop-in 0.4s var(--bounce)',
       }}
     >
-      <h2
-        className="h2"
-        style={{
-          textAlign: 'center',
-          color: 'var(--gold)',
-          WebkitTextStroke: '1.5px var(--ink)',
-          paintOrder: 'stroke fill',
-          textShadow: '2px 2px 0 var(--ink)',
-          fontSize: '2rem',
-        }}
-      >
-        Nice run!
-      </h2>
+      <ScreenHeader
+        title={
+          <h2
+            className="h2"
+            style={{
+              color: 'var(--gold)',
+              WebkitTextStroke: '1.5px var(--ink)',
+              paintOrder: 'stroke fill',
+              textShadow: '2px 2px 0 var(--ink)',
+            }}
+          >
+            Nice run!
+          </h2>
+        }
+        action={
+          <Button variant="ghost" onClick={onLibrary}>
+            Games
+          </Button>
+        }
+      />
       <Panel style={{ textAlign: 'center' }}>
         <p className="h3">{title}</p>
         <p

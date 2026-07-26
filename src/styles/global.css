@@ -121,11 +121,6 @@ a {
   margin: 0 auto;
 }
 
-/* Marker class for party UI tweaks (Chat aligns with Games — no extra empty band). */
-.app-shell--party {
-  /* intentionally no extra padding-top */
-}
-
 .panel {
   background: var(--cream);
   border: 4px solid var(--ink);

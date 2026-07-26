@@ -3,6 +3,7 @@ import { GAMES } from '../games/registry';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
 import { PartyLinked } from './PartyLinked';
+import { ScreenHeader } from './PartyChat';
 import './Library.css';
 
 type Props = {
@@ -53,12 +54,14 @@ export function Library({
 
   return (
     <div className="library">
-      <div className="library-header">
-        <h2 className="h2">Game Place</h2>
-        <Button variant="ghost" onClick={onBack}>
-          Home
-        </Button>
-      </div>
+      <ScreenHeader
+        title={<h2 className="h2">Game Place</h2>}
+        action={
+          <Button variant="ghost" onClick={onBack}>
+            Home
+          </Button>
+        }
+      />
 
       {activeRoom && onLobby && onQuitMultiplayer ? (
         <PartyLinked

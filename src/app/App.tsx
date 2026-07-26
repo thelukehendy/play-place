@@ -21,7 +21,7 @@ import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import type { GameFinishPayload } from '../games/types';
 import { Panel } from '../ui/Panel';
 import { Button } from '../ui/Button';
-import { PartyChatChrome } from './PartyChat';
+import { PartyChatProvider } from './PartyChat';
 
 const ACTIVE_ROOM_KEY = 'playplace.activeRoom';
 
@@ -238,84 +238,84 @@ export function App() {
   }, [screen.name]);
 
   return (
-    <div className={`app-shell${showPartyChat ? ' app-shell--party' : ''}`}>
-      {showPartyChat ? <PartyChatChrome code={roomCode!} /> : null}
+    <PartyChatProvider code={showPartyChat ? roomCode : null}>
+      <div className="app-shell">
+        {error ? (
+          <Panel>
+            <p style={{ fontWeight: 800, marginBottom: 10 }}>{error}</p>
+            <Button
+              variant="ghost"
+              block
+              onClick={() => {
+                setError('');
+                setScreen({ name: 'library' });
+              }}
+            >
+              OK
+            </Button>
+          </Panel>
+        ) : null}
 
-      {error ? (
-        <Panel>
-          <p style={{ fontWeight: 800, marginBottom: 10 }}>{error}</p>
-          <Button
-            variant="ghost"
-            block
-            onClick={() => {
-              setError('');
-              setScreen({ name: 'library' });
-            }}
-          >
-            OK
-          </Button>
-        </Panel>
-      ) : null}
+        {busy && screen.name === 'welcome' ? (
+          <Panel>
+            <p className="muted">Joining room…</p>
+          </Panel>
+        ) : null}
 
-      {busy && screen.name === 'welcome' ? (
-        <Panel>
-          <p className="muted">Joining room…</p>
-        </Panel>
-      ) : null}
+        {screen.name === 'welcome' ? (
+          <Welcome invited={!!inviteCode} onContinue={() => finishWelcome()} />
+        ) : null}
 
-      {screen.name === 'welcome' ? (
-        <Welcome invited={!!inviteCode} onContinue={() => finishWelcome()} />
-      ) : null}
+        {screen.name === 'library' ? (
+          <Library
+            onBack={goHome}
+            onSolo={(gameId) => setScreen({ name: 'solo', gameId, key: Date.now() })}
+            onCreateRoom={handleCreate}
+            onJoinRoom={handleJoin}
+            activeRoom={roomCode}
+            isHost={isHost}
+            hostDisplayName={hostDisplayName}
+            onLobby={() => setScreen({ name: 'room' })}
+            onQuitMultiplayer={quitMultiplayer}
+            onPlayInRoom={playInRoom}
+            onStats={() => setScreen({ name: 'stats' })}
+          />
+        ) : null}
 
-      {screen.name === 'library' ? (
-        <Library
-          onBack={goHome}
-          onSolo={(gameId) => setScreen({ name: 'solo', gameId, key: Date.now() })}
-          onCreateRoom={handleCreate}
-          onJoinRoom={handleJoin}
-          activeRoom={roomCode}
-          isHost={isHost}
-          hostDisplayName={hostDisplayName}
-          onLobby={() => setScreen({ name: 'room' })}
-          onQuitMultiplayer={quitMultiplayer}
-          onPlayInRoom={playInRoom}
-          onStats={() => setScreen({ name: 'stats' })}
-        />
-      ) : null}
+        {screen.name === 'stats' ? <Stats onBack={goLibrary} /> : null}
 
-      {screen.name === 'stats' ? <Stats onBack={goLibrary} /> : null}
+        {screen.name === 'solo' ? (
+          <SoloPlay
+            key={screen.key}
+            gameId={screen.gameId}
+            onExit={goLibrary}
+            onResults={({ gameId, title, payload }) =>
+              setScreen({ name: 'results', gameId, title, payload })
+            }
+          />
+        ) : null}
 
-      {screen.name === 'solo' ? (
-        <SoloPlay
-          key={screen.key}
-          gameId={screen.gameId}
-          onExit={goLibrary}
-          onResults={({ gameId, title, payload }) =>
-            setScreen({ name: 'results', gameId, title, payload })
-          }
-        />
-      ) : null}
+        {screen.name === 'results' ? (
+          <Results
+            title={screen.title}
+            payload={screen.payload}
+            onAgain={() =>
+              setScreen({ name: 'solo', gameId: screen.gameId, key: Date.now() })
+            }
+            onLibrary={goLibrary}
+          />
+        ) : null}
 
-      {screen.name === 'results' ? (
-        <Results
-          title={screen.title}
-          payload={screen.payload}
-          onAgain={() =>
-            setScreen({ name: 'solo', gameId: screen.gameId, key: Date.now() })
-          }
-          onLibrary={goLibrary}
-        />
-      ) : null}
-
-      {screen.name === 'room' && roomCode ? (
-        <RoomSession
-          key={matchKey || roomCode}
-          code={roomCode}
-          onBrowseGames={goLibrary}
-          onQuitGame={quitGame}
-          onHostPickGame={playInRoom}
-        />
-      ) : null}
-    </div>
+        {screen.name === 'room' && roomCode ? (
+          <RoomSession
+            key={matchKey || roomCode}
+            code={roomCode}
+            onBrowseGames={goLibrary}
+            onQuitGame={quitGame}
+            onHostPickGame={playInRoom}
+          />
+        ) : null}
+      </div>
+    </PartyChatProvider>
   );
 }

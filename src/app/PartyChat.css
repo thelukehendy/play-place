@@ -1,41 +1,59 @@
-.chat-fab {
-  /* Align with header actions like Games (same top inset as .app-shell padding). */
-  position: fixed;
-  top: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px)));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 60;
-  border: 3px solid var(--ink);
-  border-radius: 999px;
-  background: var(--gold);
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-weight: 800;
+/* Header Chat sits in normal layout — never position:fixed. */
+.chat-header-btn {
+  min-height: 40px;
+  padding: 0 14px;
   font-size: 0.95rem;
-  padding: 8px 16px;
-  box-shadow: 0 3px 0 var(--ink);
-  min-height: var(--tap);
-  line-height: 1;
-}
-
-.chat-fab:active {
-  transform: translateX(-50%) translateY(2px);
-  box-shadow: 0 1px 0 var(--ink);
-}
-
-/* Keep titles/actions clear of the centered Chat pill. */
-.app-shell--party .row > .h2,
-.app-shell--party .library-header .h2 {
-  max-width: calc(50% - 52px);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.app-shell--party .row > .btn,
-.app-shell--party .library-header > .btn {
+.screen-header .btn {
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 0.95rem;
+  white-space: nowrap;
   flex-shrink: 0;
-  max-width: calc(50% - 52px);
+}
+
+.screen-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  margin-bottom: 8px;
+  color: var(--cream);
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+.screen-header-side {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.screen-header-left {
+  justify-content: flex-start;
+}
+
+.screen-header-right {
+  justify-content: flex-end;
+}
+
+.screen-header-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.screen-header .h2 {
+  margin: 0;
+  font-size: clamp(1.05rem, 4.5vw, 1.45rem);
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .chat-toasts {
@@ -76,7 +94,6 @@
   justify-content: center;
   padding: 10px 12px 12px;
   box-sizing: border-box;
-  /* top/height set inline from visualViewport so keyboard never hides the sheet */
 }
 
 .chat-sheet {
@@ -152,5 +169,5 @@
 
 .chat-compose .field {
   flex: 1;
-  font-size: 16px; /* avoid iOS zoom-on-focus */
+  font-size: 16px;
 }

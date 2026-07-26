@@ -2,6 +2,7 @@ import { GAMES, getGame } from '../games/registry';
 import { loadStats } from '../lib/stats';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
+import { ScreenHeader } from './PartyChat';
 
 type Props = {
   onBack: () => void;
@@ -16,12 +17,14 @@ export function Stats({ onBack }: Props) {
 
   return (
     <div className="library" style={{ animation: 'pop-in 0.35s var(--bounce)' }}>
-      <div className="library-header">
-        <h2 className="h2">Stats</h2>
-        <Button variant="ghost" onClick={onBack}>
-          Games
-        </Button>
-      </div>
+      <ScreenHeader
+        title={<h2 className="h2">Stats</h2>}
+        action={
+          <Button variant="ghost" onClick={onBack}>
+            Games
+          </Button>
+        }
+      />
 
       <Panel>
         <p className="h3">Your multiplayer record</p>

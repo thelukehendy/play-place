@@ -5,6 +5,7 @@ import { randomSeed } from '../lib/random';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
+import { ScreenHeader } from './PartyChat';
 
 type Props = {
   gameId: string;
@@ -42,21 +43,18 @@ export function SoloPlay({ gameId, onExit, onResults }: Props) {
 
   return (
     <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
-      <div className="row" style={{ color: 'var(--cream)', textShadow: '1px 1px 0 var(--ink)' }}>
-        <h2
-          className="h2"
-          style={{
-            flex: 1,
-            color: 'var(--gold)',
-            WebkitTextStroke: '1px var(--ink)',
-          }}
-        >
-          {game.emoji} {game.title}
-        </h2>
-        <Button variant="ghost" onClick={onExit}>
-          Exit
-        </Button>
-      </div>
+      <ScreenHeader
+        title={
+          <h2 className="h2" style={{ color: 'var(--gold)', WebkitTextStroke: '1px var(--ink)' }}>
+            {game.emoji} {game.title}
+          </h2>
+        }
+        action={
+          <Button variant="ghost" onClick={onExit}>
+            Exit
+          </Button>
+        }
+      />
       <Panel>
         <Solo
           seed={seed}

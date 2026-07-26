@@ -29,6 +29,7 @@ import { GAMES } from '../games/registry';
 import { copyText, roomInviteUrl, shareRoomInvite } from '../lib/invite';
 import { recordMultiplayerMatch } from '../lib/stats';
 import { sfxCountdown, sfxFinish, sfxGo, sfxReady } from '../lib/sfx';
+import { ScreenHeader } from './PartyChat';
 
 const NUDGE_REMOVE_MS = 6000;
 
@@ -66,18 +67,38 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
 
   if (error) {
     return (
-      <Panel>
-        <p>{error}</p>
-        <Button onClick={onBrowseGames}>Games</Button>
-      </Panel>
+      <div className="stack">
+        <ScreenHeader
+          title={<h2 className="h2" style={{ color: 'var(--gold)' }}>Party</h2>}
+          action={
+            <Button variant="ghost" onClick={onBrowseGames}>
+              Games
+            </Button>
+          }
+        />
+        <Panel>
+          <p>{error}</p>
+          <Button onClick={onBrowseGames}>Games</Button>
+        </Panel>
+      </div>
     );
   }
 
   if (!room) {
     return (
-      <Panel>
-        <p className="muted">Loading room…</p>
-      </Panel>
+      <div className="stack">
+        <ScreenHeader
+          title={<h2 className="h2" style={{ color: 'var(--gold)' }}>Party</h2>}
+          action={
+            <Button variant="ghost" onClick={onBrowseGames}>
+              Games
+            </Button>
+          }
+        />
+        <Panel>
+          <p className="muted">Loading room…</p>
+        </Panel>
+      </div>
     );
   }
 
@@ -112,14 +133,18 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
     const amReady = !!me?.ready;
     return (
       <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
-        <div className="row" style={{ color: 'var(--cream)', textShadow: '1px 1px 0 var(--ink)' }}>
-          <h2 className="h2" style={{ flex: 1, color: 'var(--gold)' }}>
-            Party lobby
-          </h2>
-          <Button variant="ghost" onClick={onBrowseGames}>
-            Games
-          </Button>
-        </div>
+        <ScreenHeader
+          title={
+            <h2 className="h2" style={{ color: 'var(--gold)' }}>
+              Party lobby
+            </h2>
+          }
+          action={
+            <Button variant="ghost" onClick={onBrowseGames}>
+              Games
+            </Button>
+          }
+        />
         <Panel>
           {!isFirebaseConfigured() ? (
             <p className="muted" style={{ marginBottom: 10 }}>
@@ -277,18 +302,38 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
 
   if (!game) {
     return (
-      <Panel>
-        <p>Unknown game.</p>
-        <Button onClick={onBrowseGames}>Games</Button>
-      </Panel>
+      <div className="stack">
+        <ScreenHeader
+          title={<h2 className="h2" style={{ color: 'var(--gold)' }}>Party</h2>}
+          action={
+            <Button variant="ghost" onClick={onBrowseGames}>
+              Games
+            </Button>
+          }
+        />
+        <Panel>
+          <p>Unknown game.</p>
+          <Button onClick={onBrowseGames}>Games</Button>
+        </Panel>
+      </div>
     );
   }
 
   if (!matchLive && room.status !== 'playing') {
     return (
-      <Panel>
-        <p className="muted">Getting ready…</p>
-      </Panel>
+      <div className="stack">
+        <ScreenHeader
+          title={<h2 className="h2" style={{ color: 'var(--gold)' }}>Party</h2>}
+          action={
+            <Button variant="ghost" onClick={onBrowseGames}>
+              Games
+            </Button>
+          }
+        />
+        <Panel>
+          <p className="muted">Getting ready…</p>
+        </Panel>
+      </div>
     );
   }
 
@@ -408,6 +453,13 @@ function CountdownScreen({
 
   return (
     <div className="stack" style={{ animation: 'pop-in 0.25s var(--bounce)' }}>
+      <ScreenHeader
+        title={
+          <h2 className="h2" style={{ color: 'var(--gold)' }}>
+            Get ready
+          </h2>
+        }
+      />
       <Panel style={{ textAlign: 'center', padding: '28px 16px' }}>
         <p className="h3">{gameTitle}</p>
         <p className="muted" style={{ margin: '8px 0 4px' }}>
@@ -477,17 +529,25 @@ function ResultsRoom({
 
   return (
     <div className="stack" style={{ animation: 'pop-in 0.35s var(--bounce)' }}>
-      <h2
-        className="h2"
-        style={{
-          textAlign: 'center',
-          color: 'var(--gold)',
-          WebkitTextStroke: '1.5px var(--ink)',
-          textShadow: '2px 2px 0 var(--ink)',
-        }}
-      >
-        Results!
-      </h2>
+      <ScreenHeader
+        title={
+          <h2
+            className="h2"
+            style={{
+              color: 'var(--gold)',
+              WebkitTextStroke: '1.5px var(--ink)',
+              textShadow: '2px 2px 0 var(--ink)',
+            }}
+          >
+            Results!
+          </h2>
+        }
+        action={
+          <Button variant="ghost" onClick={onBrowseGames}>
+            Games
+          </Button>
+        }
+      />
       <Panel>
         <p className="h3" style={{ marginBottom: 10 }}>
           {game?.emoji} {game?.title}
@@ -636,14 +696,18 @@ function RoomPlay({
 
   return (
     <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
-      <div className="row" style={{ color: 'var(--cream)', textShadow: '1px 1px 0 var(--ink)' }}>
-        <h2 className="h2" style={{ flex: 1, color: 'var(--gold)', fontSize: '1.3rem' }}>
-          {game.emoji} {game.title}
-        </h2>
-        <Button variant="ghost" onClick={onQuitGame}>
-          Quit game
-        </Button>
-      </div>
+      <ScreenHeader
+        title={
+          <h2 className="h2" style={{ color: 'var(--gold)' }}>
+            {game.emoji} {game.title}
+          </h2>
+        }
+        action={
+          <Button variant="ghost" onClick={onQuitGame}>
+            Quit game
+          </Button>
+        }
+      />
       <p className="muted" style={{ textAlign: 'center', fontWeight: 800, marginTop: -4 }}>
         Join code {room.code}
       </p>
