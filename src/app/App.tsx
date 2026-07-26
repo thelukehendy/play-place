@@ -229,9 +229,11 @@ export function App() {
   const isHost = !!(roomSnap && roomSnap.hostId === playerId);
   const hostDisplayName = roomSnap?.players?.[roomSnap.hostId]?.name ?? 'Host';
 
+  const showPartyChat = !!roomCode && screen.name !== 'welcome';
+
   return (
-    <div className="app-shell">
-      {roomCode && screen.name !== 'welcome' ? <PartyChatChrome code={roomCode} /> : null}
+    <div className={`app-shell${showPartyChat ? ' app-shell--party' : ''}`}>
+      {showPartyChat ? <PartyChatChrome code={roomCode!} /> : null}
 
       {error ? (
         <Panel>
