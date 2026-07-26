@@ -77,34 +77,6 @@ export function ScreenHeader({
   );
 }
 
-function useVisibleFrame(active: boolean) {
-  const [frame, setFrame] = useState(() => ({
-    top: 0,
-    height: typeof window !== 'undefined' ? window.innerHeight : 600,
-  }));
-
-  useEffect(() => {
-    if (!active) return;
-    const sync = () => {
-      const vv = window.visualViewport;
-      if (vv) setFrame({ top: vv.offsetTop, height: vv.height });
-      else setFrame({ top: 0, height: window.innerHeight });
-    };
-    sync();
-    const vv = window.visualViewport;
-    vv?.addEventListener('resize', sync);
-    vv?.addEventListener('scroll', sync);
-    window.addEventListener('resize', sync);
-    return () => {
-      vv?.removeEventListener('resize', sync);
-      vv?.removeEventListener('scroll', sync);
-      window.removeEventListener('resize', sync);
-    };
-  }, [active]);
-
-  return frame;
-}
-
 type ProviderProps = {
   code: string | null;
   children: ReactNode;
@@ -119,7 +91,6 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
   const bootstrapped = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const frame = useVisibleFrame(open);
   const player = useMemo(
     () => ({ id: getOrCreatePlayerId(), name: ensureNickname() }),
     [],
@@ -163,12 +134,18 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     });
   }, [messages, player.id, code]);
 
+  // Focus once when opening — never on each send (that jumps the keyboard).
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => inputRef.current?.focus(), 40);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  // Keep list scrolled to latest without touching focus/layout.
   useEffect(() => {
     if (!open) return;
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-    const t = window.setTimeout(() => inputRef.current?.focus(), 50);
-    return () => clearTimeout(t);
   }, [open, messages.length]);
 
   const myNudgeAt = room?.nudges?.[player.id]?.at;
@@ -207,11 +184,14 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     if (!text) return;
     setDraft('');
     sfxTap();
+    // Keep keyboard open — do not blur on send.
+    inputRef.current?.focus();
     try {
       await sendChatMessage(code, player, text);
     } catch {
       /* ignore */
     }
+    inputRef.current?.focus();
   };
 
   return (
@@ -233,9 +213,18 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
           className="chat-overlay"
           role="dialog"
           aria-modal="true"
-          style={{ top: frame.top, height: frame.height }}
+          onMouseDown={(e) => {
+            // Backdrop click closes; ignore presses inside the sheet.
+            if (e.target === e.currentTarget) {
+              setOpen(false);
+              setDraft('');
+            }
+          }}
         >
-          <div className="chat-sheet">
+          <div
+            className="chat-sheet"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <div className="chat-sheet-head">
               <p className="h3" style={{ margin: 0 }}>
                 Party chat
@@ -285,7 +274,15 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
                 autoComplete="off"
                 autoCorrect="off"
               />
-              <Button type="submit" variant="primary" disabled={!draft.trim()}>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!draft.trim()}
+                onMouseDown={(e) => {
+                  // Keep the keyboard up — don't steal focus from the input.
+                  e.preventDefault();
+                }}
+              >
                 Send
               </Button>
             </form>
