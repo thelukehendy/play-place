@@ -28,7 +28,13 @@ export function shuffle<T>(arr: T[], rng: () => number): T[] {
 }
 
 export function randomSeed(): number {
-  return (Math.random() * 0xffffffff) >>> 0;
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    // Avoid 0 so weak generators that treat it as “unset” still scramble.
+    return (buf[0] || 1) >>> 0;
+  }
+  return (((Math.random() * 0xffffffff) >>> 0) || 1) >>> 0;
 }
 
 export function roomCode(length = 5): string {

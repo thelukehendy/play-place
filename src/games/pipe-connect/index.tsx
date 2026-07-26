@@ -129,16 +129,12 @@ function randomPath(rng: () => number): number[] {
     visited.add(i);
     path.push(i);
     if (i === end) return true;
+    // True shuffle — do not re-sort afterward or the seed is wasted.
     const dirs: Dir[] = [0, 1, 2, 3];
     for (let a = dirs.length - 1; a > 0; a--) {
       const b = Math.floor(rng() * (a + 1));
       [dirs[a], dirs[b]] = [dirs[b], dirs[a]];
     }
-    // Prefer moving toward bottom-right
-    dirs.sort((a, b) => {
-      const bias = (d: Dir) => (d === 1 || d === 2 ? 0 : 1);
-      return bias(a) - bias(b);
-    });
     for (const d of dirs) {
       const j = neighborIndex(i, d);
       if (j < 0 || visited.has(j)) continue;
@@ -201,8 +197,8 @@ export function createPipeState(seed: number): PipeState {
   const rng = createRng(seed);
 
   let cells: Cell[] | null = null;
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const path = attempt === 0 ? randomPath(rng) : attempt < 4 ? randomPath(rng) : snakePath();
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const path = attempt < 10 ? randomPath(rng) : snakePath();
     const candidate = buildSolvedCells(path, rng);
     if (reachesEnd(candidate)) {
       cells = candidate;
@@ -215,20 +211,21 @@ export function createPipeState(seed: number): PipeState {
 
   // Final safety: if somehow still broken, force a minimal straight corridor on row 0 + last col
   if (!reachesEnd(cells)) {
-    const path = [...Array.from({ length: SIZE }, (_, c) => c), ...Array.from(
-      { length: SIZE - 1 },
-      (_, r) => (r + 1) * SIZE + (SIZE - 1),
-    )];
+    const path = [
+      ...Array.from({ length: SIZE }, (_, c) => c),
+      ...Array.from({ length: SIZE - 1 }, (_, r) => (r + 1) * SIZE + (SIZE - 1)),
+    ];
     cells = buildSolvedCells(path, rng);
   }
 
-  // Scramble rotatable tiles — never change kind, so solution always exists
+  // Scramble rotatable tiles — never change kind, so solution always exists.
+  // Pick a seed-driven target rotation distinct from the solved orientation.
   for (let i = 0; i < cells.length; i++) {
     if (cells[i].fixed) continue;
-    let extra = 1 + Math.floor(rng() * 3);
-    // Straight pipes look identical every 2 turns — ensure a visible scramble
-    if (cells[i].kind === 'I' && extra % 2 === 0) extra = (extra % 4) + 1;
-    cells[i] = { ...cells[i], rot: (cells[i].rot + extra) % 4 };
+    const period = cells[i].kind === 'I' || cells[i].kind === 'X' ? 2 : 4;
+    let delta = 1 + Math.floor(rng() * (period - 1 || 1));
+    if (period === 2) delta = 1; // I/X: flip once so scramble is always visible
+    cells[i] = { ...cells[i], rot: (cells[i].rot + delta) % 4 };
   }
 
   return { cells, startedAt: null, finishedAt: null, rotations: 0 };

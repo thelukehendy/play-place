@@ -18,6 +18,7 @@ import {
   type RoomData,
 } from '../multiplayer/rooms';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
+import { randomSeed } from '../lib/random';
 import type { GameFinishPayload } from '../games/types';
 import { Panel } from '../ui/Panel';
 import { Button } from '../ui/Button';
@@ -269,7 +270,7 @@ export function App() {
         {screen.name === 'library' ? (
           <Library
             onBack={goHome}
-            onSolo={(gameId) => setScreen({ name: 'solo', gameId, key: Date.now() })}
+            onSolo={(gameId) => setScreen({ name: 'solo', gameId, key: randomSeed() })}
             onCreateRoom={handleCreate}
             onJoinRoom={handleJoin}
             activeRoom={roomCode}
@@ -287,6 +288,7 @@ export function App() {
         {screen.name === 'solo' ? (
           <SoloPlay
             key={screen.key}
+            runId={screen.key}
             gameId={screen.gameId}
             onExit={goLibrary}
             onResults={({ gameId, title, payload }) =>
@@ -300,7 +302,7 @@ export function App() {
             title={screen.title}
             payload={screen.payload}
             onAgain={() =>
-              setScreen({ name: 'solo', gameId: screen.gameId, key: Date.now() })
+              setScreen({ name: 'solo', gameId: screen.gameId, key: randomSeed() })
             }
             onLibrary={goLibrary}
           />

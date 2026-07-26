@@ -721,6 +721,7 @@ function RoomPlay({
         />
         {game.modes.includes('turn') && game.TurnView ? (
           <game.TurnView
+            key={`${room.gameId}-${room.seed}`}
             seed={room.seed}
             player={player}
             players={players.slice(0, 4)}
@@ -744,6 +745,7 @@ function RoomPlay({
           />
         ) : game.RaceView ? (
           <game.RaceView
+            key={`${room.gameId}-${room.seed}`}
             seed={room.seed}
             player={player}
             players={livePlayers}

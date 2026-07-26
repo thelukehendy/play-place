@@ -9,6 +9,8 @@ import { ScreenHeader } from './PartyChat';
 
 type Props = {
   gameId: string;
+  /** Changes on every Play again / library launch so a new seed is guaranteed. */
+  runId: number;
   onExit: () => void;
   onResults: (payload: {
     gameId: string;
@@ -17,9 +19,16 @@ type Props = {
   }) => void;
 };
 
-export function SoloPlay({ gameId, onExit, onResults }: Props) {
+export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
   const game = getGame(gameId);
-  const [seed, setSeed] = useState(() => randomSeed());
+  /** Extra reshuffles from the in-game "New puzzle" button. */
+  const [reshuffle, setReshuffle] = useState(0);
+  const seed = useMemo(
+    () => randomSeed(),
+    // Intentionally re-roll whenever the run or reshuffle changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gameId, runId, reshuffle],
+  );
   const player = useMemo(
     () => ({ id: getOrCreatePlayerId(), name: ensureNickname() }),
     [],
@@ -57,13 +66,18 @@ export function SoloPlay({ gameId, onExit, onResults }: Props) {
       />
       <Panel>
         <Solo
+          key={seed}
           seed={seed}
           player={player}
           initialState={initialState}
           onFinish={(payload) => onResults({ gameId, title: game.title, payload })}
         />
       </Panel>
-      <Button variant="sky" block onClick={() => setSeed(randomSeed())}>
+      <Button
+        variant="sky"
+        block
+        onClick={() => setReshuffle((n) => n + 1)}
+      >
         New puzzle
       </Button>
     </div>

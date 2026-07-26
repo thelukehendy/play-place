@@ -342,13 +342,14 @@ async function beginCountdown(
   await update(ref(db, `rooms/${normalized}`), updates);
 }
 
-export async function startMatch(code: string, seed?: number) {
-  await beginCountdown(code, { seed });
+export async function startMatch(code: string, _seed?: number) {
+  // Always mint a fresh seed — never reuse a caller-supplied board.
+  await beginCountdown(code, { seed: randomSeed() });
 }
 
 /** Host picks a game and everyone jumps into the countdown together. */
-export async function startPartyGame(code: string, gameId: string, seed?: number) {
-  await beginCountdown(code, { gameId, seed });
+export async function startPartyGame(code: string, gameId: string, _seed?: number) {
+  await beginCountdown(code, { gameId, seed: randomSeed() });
 }
 
 export async function rematch(code: string) {
