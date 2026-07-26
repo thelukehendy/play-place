@@ -121,10 +121,9 @@ a {
   margin: 0 auto;
 }
 
-/* Reserve a top band for the multiplayer Chat button so it never covers UI. */
+/* Marker class for party UI tweaks (Chat aligns with Games — no extra empty band). */
 .app-shell--party {
-  --party-chat-h: 48px;
-  padding-top: calc(12px + var(--safe-top) + var(--party-chat-h) + 8px);
+  /* intentionally no extra padding-top */
 }
 
 .panel {

@@ -18,6 +18,37 @@ type Props = {
   code: string;
 };
 
+function useVisibleFrame(active: boolean) {
+  const [frame, setFrame] = useState(() => ({
+    top: 0,
+    height: typeof window !== 'undefined' ? window.innerHeight : 600,
+  }));
+
+  useEffect(() => {
+    if (!active) return;
+    const sync = () => {
+      const vv = window.visualViewport;
+      if (vv) {
+        setFrame({ top: vv.offsetTop, height: vv.height });
+      } else {
+        setFrame({ top: 0, height: window.innerHeight });
+      }
+    };
+    sync();
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', sync);
+    vv?.addEventListener('scroll', sync);
+    window.addEventListener('resize', sync);
+    return () => {
+      vv?.removeEventListener('resize', sync);
+      vv?.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
+    };
+  }, [active]);
+
+  return frame;
+}
+
 export function PartyChatChrome({ code }: Props) {
   const [room, setRoom] = useState<RoomData | null>(null);
   const [open, setOpen] = useState(false);
@@ -26,6 +57,8 @@ export function PartyChatChrome({ code }: Props) {
   const seen = useRef<Set<string>>(new Set());
   const bootstrapped = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const frame = useVisibleFrame(open);
   const player = useMemo(
     () => ({ id: getOrCreatePlayerId(), name: ensureNickname() }),
     [],
@@ -67,10 +100,11 @@ export function PartyChatChrome({ code }: Props) {
     if (!open) return;
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
+    // Focus after layout so the sheet is on-screen above the keyboard.
+    const t = window.setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, [open, messages.length]);
 
-  // Nudge toasts for local player — dismiss after a couple seconds.
-  // Do not clear the timer on effect re-runs (room snapshots would cancel dismiss).
   const myNudgeAt = room?.nudges?.[player.id]?.at;
   const myNudgeFrom = room?.nudges?.[player.id]?.fromName;
   useEffect(() => {
@@ -117,26 +151,39 @@ export function PartyChatChrome({ code }: Props) {
         ))}
       </div>
 
-      <button
-        type="button"
-        className="chat-fab"
-        onClick={() => {
-          sfxTap();
-          setOpen(true);
-        }}
-        aria-label="Open party chat"
-      >
-        Chat
-      </button>
+      {!open ? (
+        <button
+          type="button"
+          className="chat-fab"
+          onClick={() => {
+            sfxTap();
+            setOpen(true);
+          }}
+          aria-label="Open party chat"
+        >
+          Chat
+        </button>
+      ) : null}
 
       {open ? (
-        <div className="chat-overlay" role="dialog" aria-modal="true">
+        <div
+          className="chat-overlay"
+          role="dialog"
+          aria-modal="true"
+          style={{ top: frame.top, height: frame.height }}
+        >
           <div className="chat-sheet">
             <div className="chat-sheet-head">
               <p className="h3" style={{ margin: 0 }}>
                 Party chat
               </p>
-              <Button variant="ghost" onClick={() => setOpen(false)}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setOpen(false);
+                  setDraft('');
+                }}
+              >
                 Close
               </Button>
             </div>
@@ -165,13 +212,15 @@ export function PartyChatChrome({ code }: Props) {
               }}
             >
               <input
+                ref={inputRef}
                 className="field"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Message the party…"
                 maxLength={200}
-                autoFocus
                 enterKeyHint="send"
+                autoComplete="off"
+                autoCorrect="off"
               />
               <Button type="submit" variant="primary" disabled={!draft.trim()}>
                 Send

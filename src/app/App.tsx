@@ -231,6 +231,12 @@ export function App() {
 
   const showPartyChat = !!roomCode && screen.name !== 'welcome';
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [screen.name]);
+
   return (
     <div className={`app-shell${showPartyChat ? ' app-shell--party' : ''}`}>
       {showPartyChat ? <PartyChatChrome code={roomCode!} /> : null}
