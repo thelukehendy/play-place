@@ -57,8 +57,8 @@ export function ChatButton() {
 }
 
 /**
- * Three-slot header: title | Chat (party only) | action.
- * Keeps Chat in document flow so it cannot cover Games/Quit/etc.
+ * Header row: title | Chat (party) | action.
+ * Flex + shrink-safe title so buttons never overlap.
  */
 export function ScreenHeader({
   title,
@@ -70,9 +70,9 @@ export function ScreenHeader({
   const { enabled } = usePartyChat();
   return (
     <header className={`screen-header${enabled ? ' screen-header--party' : ''}`}>
-      <div className="screen-header-side screen-header-left">{title}</div>
-      <div className="screen-header-center">{enabled ? <ChatButton /> : null}</div>
-      <div className="screen-header-side screen-header-right">{action}</div>
+      <div className="screen-header-title">{title}</div>
+      {enabled ? <ChatButton /> : null}
+      {action ? <div className="screen-header-action">{action}</div> : null}
     </header>
   );
 }
