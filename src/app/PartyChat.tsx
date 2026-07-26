@@ -11,7 +11,8 @@ import { Button } from '../ui/Button';
 import { sfxTap } from '../lib/sfx';
 import './PartyChat.css';
 
-const TOAST_MS = 4500;
+const TOAST_MS = 2500;
+const NUDGE_TOAST_MS = 2500;
 
 type Props = {
   code: string;
@@ -68,26 +69,31 @@ export function PartyChatChrome({ code }: Props) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [open, messages.length]);
 
-  // Nudge toasts for local player
-  const myNudge = room?.nudges?.[player.id];
+  // Nudge toasts for local player — dismiss after a couple seconds.
+  // Do not clear the timer on effect re-runs (room snapshots would cancel dismiss).
+  const myNudgeAt = room?.nudges?.[player.id]?.at;
+  const myNudgeFrom = room?.nudges?.[player.id]?.fromName;
   useEffect(() => {
-    if (!myNudge) return;
-    const id = `nudge-${myNudge.at}`;
+    if (!myNudgeAt || !myNudgeFrom) return;
+    const id = `nudge-${myNudgeAt}`;
     if (seen.current.has(id)) return;
     seen.current.add(id);
-    const toast = {
-      id,
-      fromId: myNudge.fromId,
-      fromName: myNudge.fromName,
-      text: 'Ready to go?',
-      at: myNudge.at,
-    };
-    setToasts((t) => [...t, toast].slice(-4));
-    const timer = window.setTimeout(() => {
+    setToasts((t) =>
+      [
+        ...t,
+        {
+          id,
+          fromId: 'nudge',
+          fromName: myNudgeFrom,
+          text: 'Ready to go?',
+          at: myNudgeAt,
+        },
+      ].slice(-4),
+    );
+    window.setTimeout(() => {
       setToasts((t) => t.filter((x) => x.id !== id));
-    }, TOAST_MS);
-    return () => clearTimeout(timer);
-  }, [myNudge, player.id]);
+    }, NUDGE_TOAST_MS);
+  }, [myNudgeAt, myNudgeFrom]);
 
   const send = async () => {
     const text = draft.trim();
