@@ -51,7 +51,7 @@ export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
   const Solo = game.SoloView;
 
   return (
-    <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
+    <div className={`stack solo-play${gameId === 'anagram-sprint' || gameId === 'word-claim' ? ' solo-play--compact' : ''}`} style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
       <ScreenHeader
         title={
           <h2 className="h2" style={{ color: 'var(--gold)', WebkitTextStroke: '1px var(--ink)' }}>
@@ -64,7 +64,7 @@ export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
           </Button>
         }
       />
-      <Panel>
+      <Panel className={gameId === 'anagram-sprint' || gameId === 'word-claim' ? 'solo-play-panel' : ''}>
         <Solo
           key={seed}
           seed={seed}
@@ -73,13 +73,15 @@ export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
           onFinish={(payload) => onResults({ gameId, title: game.title, payload })}
         />
       </Panel>
-      <Button
-        variant="sky"
-        block
-        onClick={() => setReshuffle((n) => n + 1)}
-      >
-        New puzzle
-      </Button>
+      {gameId === 'anagram-sprint' || gameId === 'word-claim' ? null : (
+        <Button
+          variant="sky"
+          block
+          onClick={() => setReshuffle((n) => n + 1)}
+        >
+          New puzzle
+        </Button>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRng, formatTime, shuffle } from '../../lib/random';
 import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
-import { GameHud, Rules, Stat } from '../../ui/GameChrome';
+import { GameHud, Stat } from '../../ui/GameChrome';
 import { Button } from '../../ui/Button';
 import './AnagramSprint.css';
 
@@ -429,27 +429,23 @@ function Board({
   const done = state.finishedAt !== null;
   const word = state.scrambled[Math.min(state.index, ROUNDS - 1)];
   return (
-    <div>
+    <div className="ana-board">
       <GameHud>
         <Stat>
-          Round {Math.min(state.index + 1, ROUNDS)}/{ROUNDS}
+          {Math.min(state.index + 1, ROUNDS)}/{ROUNDS}
         </Stat>
-        <Stat>Correct: {state.correct}</Stat>
+        <Stat>✓ {state.correct}</Stat>
         <Stat>{formatTime(elapsed)}</Stat>
       </GameHud>
-      <Rules text="Unscramble each word. Misses reveal the answer." />
-      <div className="panel ana-card">
+      <div className="ana-play">
         {!done ? (
           <>
-            <p className="ana-round muted">{reveal ? 'Answer' : 'Unscramble'}</p>
             <p className="ana-scrambled">{reveal ? reveal : word}</p>
             {reveal ? (
-              <p className="muted" style={{ fontWeight: 800, textAlign: 'center' }}>
-                It was {reveal}
-              </p>
+              <p className="ana-reveal-note">It was {reveal}</p>
             ) : (
               <form
-                className="stack"
+                className="ana-form"
                 onSubmit={(e) => {
                   e.preventDefault();
                   onSubmit();
@@ -463,27 +459,25 @@ function Board({
                   autoCorrect="off"
                   spellCheck={false}
                   placeholder="YOUR GUESS"
+                  enterKeyHint="done"
+                  autoComplete="off"
                   autoFocus
                 />
-                <Button type="submit" variant="gold" block>
+                <Button type="submit" variant="gold" block className="ana-submit">
                   Submit
                 </Button>
               </form>
             )}
           </>
         ) : (
-          <>
-            <p className="h3">Done! {state.correct}/{ROUNDS} correct</p>
-            {missed.length ? (
-              <p className="muted" style={{ marginTop: 10, fontWeight: 800 }}>
-                Missed: {missed.join(', ')}
-              </p>
-            ) : (
-              <p className="muted" style={{ marginTop: 10, fontWeight: 800 }}>
-                Perfect round!
-              </p>
-            )}
-          </>
+          <div className="ana-done">
+            <p className="h3" style={{ margin: 0 }}>
+              Done! {state.correct}/{ROUNDS}
+            </p>
+            <p className="ana-reveal-note">
+              {missed.length ? `Missed: ${missed.join(', ')}` : 'Perfect round!'}
+            </p>
+          </div>
         )}
       </div>
       {footer}

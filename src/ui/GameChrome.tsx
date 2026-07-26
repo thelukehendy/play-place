@@ -75,12 +75,14 @@ export function Scoreboard({
   youId,
   finished = [],
   title = 'Live scores',
+  compact = false,
 }: {
   players: PlayerInfo[];
   scores: Record<string, ScoreValue | undefined>;
   youId: string;
   finished?: string[];
   title?: string;
+  compact?: boolean;
 }) {
   const sorted = [...players].sort((a, b) => {
     const aDone = finished.includes(a.id) ? 0 : 1;
@@ -96,8 +98,8 @@ export function Scoreboard({
   });
 
   return (
-    <div className="scoreboard">
-      <div className="scoreboard-title">{title}</div>
+    <div className={`scoreboard${compact ? ' scoreboard--compact' : ''}`}>
+      {!compact ? <div className="scoreboard-title">{title}</div> : null}
       {sorted.map((p) => (
         <ScoreRow
           key={p.id}

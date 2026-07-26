@@ -1,26 +1,72 @@
-.ana-card {
+/* Compact layout that stays above the iOS keyboard. */
+.ana-board {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ana-board .game-hud {
+  margin-bottom: 0;
+  gap: 6px;
+}
+
+.ana-board .game-hud .stat {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  border-width: 2px;
+}
+
+.ana-play {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
   text-align: center;
-  padding: 20px 12px;
-  margin-bottom: 12px;
 }
 
 .ana-scrambled {
   font-family: var(--font-display);
-  font-size: 2.4rem;
+  font-size: clamp(1.45rem, 6.5vw, 2rem);
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   color: var(--red);
-  margin: 0 0 8px;
+  margin: 0;
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.ana-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .ana-input {
   text-align: center;
-  font-size: 1.3rem;
+  font-size: 1.05rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  min-height: 44px;
+  padding: 0 12px;
 }
 
-.ana-round {
+.ana-submit {
+  min-height: 44px;
+  font-size: 1rem;
+}
+
+.ana-reveal-note {
+  margin: 0;
   font-weight: 800;
-  margin-bottom: 8px;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.ana-done {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+  padding: 4px 0;
 }

@@ -1,19 +1,39 @@
+.wc-board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wc-board .game-hud {
+  margin-bottom: 0;
+  gap: 6px;
+}
+
+.wc-board .game-hud .stat {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  border-width: 2px;
+}
+
 .wc-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 5px;
+  width: min(100%, 280px);
+  margin: 0 auto;
 }
 
 .wc-letter {
   aspect-ratio: 1;
-  border: 3px solid var(--ink);
-  border-radius: var(--radius-sm);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 1.4rem;
+  font-size: clamp(1rem, 4.5vw, 1.25rem);
   background: var(--gold);
-  box-shadow: 0 3px 0 var(--ink);
+  box-shadow: 0 2px 0 var(--ink);
+  min-height: 0;
+  padding: 0;
 }
 
 .wc-letter.on {
@@ -28,17 +48,18 @@
 .wc-word {
   text-align: center;
   font-family: var(--font-display);
-  font-size: 1.8rem;
+  font-size: clamp(1.05rem, 4.5vw, 1.35rem);
   font-weight: 800;
-  letter-spacing: 0.1em;
-  min-height: 2rem;
-  margin: 0 0 10px;
+  letter-spacing: 0.06em;
+  min-height: 1.4rem;
+  margin: 0;
+  line-height: 1.2;
   transition: color 0.15s, transform 0.15s var(--bounce);
 }
 
 .wc-word.ok {
   color: var(--green-dark);
-  transform: scale(1.06);
+  transform: scale(1.04);
 }
 
 .wc-word.bad {
@@ -46,44 +67,36 @@
   animation: wiggle 0.35s ease;
 }
 
-.wc-flash {
-  text-align: center;
-  font-weight: 800;
-  font-size: 1rem;
-  min-height: 1.4rem;
-  margin-bottom: 6px;
-  border-radius: 999px;
-  padding: 6px 12px;
-  transition: background 0.15s, color 0.15s;
+.wc-actions {
+  gap: 8px;
+  justify-content: center;
 }
 
-.wc-flash.ok {
-  background: #c8f0c8;
-  color: var(--green-dark);
-  border: 2px solid var(--green-dark);
-  animation: pop-in 0.25s var(--bounce);
+.wc-actions .btn {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 0.95rem;
+  flex: 1 1 0;
 }
-
-.wc-flash.bad {
-  background: #ffd0d0;
-  color: var(--red-dark);
-  border: 2px solid var(--red);
-  animation: wiggle 0.35s ease;
-}
-
 
 .wc-found {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
+  flex-wrap: nowrap;
+  gap: 5px;
+  margin-top: 2px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+  max-height: 34px;
 }
 
 .wc-chip {
   background: var(--cloud);
   border: 2px solid var(--ink);
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: 2px 8px;
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }

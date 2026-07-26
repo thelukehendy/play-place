@@ -30,6 +30,11 @@
   margin: 0 0 12px;
 }
 
+.scoreboard--compact {
+  gap: 4px;
+  margin: 0 0 8px;
+}
+
 .scoreboard-title {
   font-family: var(--font-display);
   font-weight: 800;
@@ -44,6 +49,23 @@
   padding: 8px 10px;
   font-weight: 800;
   transition: background 0.2s, border-color 0.2s, transform 0.2s var(--bounce);
+}
+
+.scoreboard--compact .score-row {
+  padding: 4px 8px;
+}
+
+.scoreboard--compact .score-name {
+  font-size: 0.85rem;
+}
+
+.scoreboard--compact .score-status {
+  font-size: 0.75rem;
+}
+
+.scoreboard--compact .score-bar {
+  margin-top: 3px;
+  height: 5px;
 }
 
 .score-row.you {

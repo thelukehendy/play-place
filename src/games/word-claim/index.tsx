@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createRng, formatTime, shuffle } from '../../lib/random';
 import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
-import { GameHud, Rules, Stat } from '../../ui/GameChrome';
+import { GameHud, Stat } from '../../ui/GameChrome';
 import { Button } from '../../ui/Button';
 import { isScrabbleWord, loadWordDict } from './dictionary';
 import './WordClaim.css';
@@ -179,18 +179,14 @@ function Board({
   footer?: ReactNode;
 }) {
   return (
-    <div>
+    <div className="wc-board">
       <GameHud>
-        <Stat>Score: {state.score}</Stat>
-        <Stat>Words: {state.found.length}</Stat>
+        <Stat>{state.score} pts</Stat>
+        <Stat>{state.found.length} words</Stat>
         <Stat>{formatTime(remaining)}</Stat>
       </GameHud>
-      <Rules text="Scrabble-legal words only (2+ letters). 60 seconds!" />
-      <div className={`wc-flash ${flash ? flash.kind : ''}`} role="status" aria-live="polite">
-        {flash ? flash.text : '\u00A0'}
-      </div>
       <p className={`wc-word ${flash?.kind === 'ok' ? 'ok' : ''} ${flash?.kind === 'bad' ? 'bad' : ''}`}>
-        {word || '· · ·'}
+        {word || (flash ? flash.text : 'Tap letters')}
       </p>
       <div className="wc-grid">
         {state.letters.map((L, i) => (
@@ -205,7 +201,7 @@ function Board({
           </button>
         ))}
       </div>
-      <div className="row">
+      <div className="wc-actions row">
         <Button variant="ghost" onClick={onClear} disabled={!!state.finishedAt}>
           Clear
         </Button>
@@ -213,13 +209,15 @@ function Board({
           Claim
         </Button>
       </div>
-      <div className="wc-found">
-        {state.found.map((w) => (
-          <span key={w} className="wc-chip">
-            {w}
-          </span>
-        ))}
-      </div>
+      {state.found.length > 0 ? (
+        <div className="wc-found">
+          {state.found.map((w) => (
+            <span key={w} className="wc-chip">
+              {w}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {footer}
     </div>
   );

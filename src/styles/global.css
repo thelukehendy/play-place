@@ -129,6 +129,34 @@ a {
   padding: 16px;
 }
 
+.room-play {
+  gap: 8px;
+}
+
+.room-play-panel {
+  padding: 10px 12px;
+}
+
+.room-play .screen-header {
+  margin-bottom: 0;
+}
+
+.room-play .screen-header .h2 {
+  font-size: clamp(1rem, 4vw, 1.25rem);
+}
+
+.solo-play--compact {
+  gap: 8px;
+}
+
+.solo-play--compact .screen-header {
+  margin-bottom: 0;
+}
+
+.solo-play-panel {
+  padding: 10px 12px;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

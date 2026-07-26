@@ -695,7 +695,7 @@ function RoomPlay({
   const livePlayers = players.slice(0, 4);
 
   return (
-    <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
+    <div className="stack room-play" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
       <ScreenHeader
         title={
           <h2 className="h2" style={{ color: 'var(--gold)' }}>
@@ -708,11 +708,9 @@ function RoomPlay({
           </Button>
         }
       />
-      <p className="muted" style={{ textAlign: 'center', fontWeight: 800, marginTop: -4 }}>
-        Join code {room.code}
-      </p>
-      <Panel>
+      <Panel className="room-play-panel">
         <Scoreboard
+          compact
           title="Match status"
           players={livePlayers}
           scores={room.scores || {}}
