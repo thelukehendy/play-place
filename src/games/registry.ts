@@ -2,7 +2,7 @@ import { numberRushGame } from './number-rush';
 import { slideRaceGame } from './slide-race';
 import { memoryMatchGame } from './memory-match';
 import { colorFloodGame } from './color-flood';
-import { lightsOutGame } from './lights-out';
+import { signalTapGame } from './signal-tap';
 import { pipeConnectGame } from './pipe-connect';
 import { anagramSprintGame } from './anagram-sprint';
 import { wordClaimGame } from './word-claim';
@@ -16,7 +16,7 @@ export const GAMES: GameDefinition<any>[] = [
   slideRaceGame,
   memoryMatchGame,
   colorFloodGame,
-  lightsOutGame,
+  signalTapGame,
   pipeConnectGame,
   anagramSprintGame,
   wordClaimGame,

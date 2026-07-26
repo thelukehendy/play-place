@@ -11,9 +11,12 @@ type Props = {
   onCreateRoom: (gameId: string) => void;
   onJoinRoom: (code: string) => void;
   activeRoom?: string | null;
+  isHost?: boolean;
   onLobby?: () => void;
   onQuitMultiplayer?: () => void;
+  /** In a party: host tapping a game starts it for everyone. */
   onPlayInRoom?: (gameId: string) => void;
+  onStats: () => void;
 };
 
 export function Library({
@@ -22,12 +25,28 @@ export function Library({
   onCreateRoom,
   onJoinRoom,
   activeRoom,
+  isHost,
   onLobby,
   onQuitMultiplayer,
   onPlayInRoom,
+  onStats,
 }: Props) {
   const [code, setCode] = useState('');
   const [picked, setPicked] = useState<string | null>(null);
+  const [hostNote, setHostNote] = useState('');
+
+  const pickGame = (gameId: string) => {
+    setHostNote('');
+    if (activeRoom && onPlayInRoom) {
+      if (isHost) {
+        onPlayInRoom(gameId);
+      } else {
+        setHostNote('Only the host can switch games. Hang tight!');
+      }
+      return;
+    }
+    setPicked(gameId);
+  };
 
   return (
     <div className="library">
@@ -46,6 +65,20 @@ export function Library({
         />
       ) : null}
 
+      {hostNote ? (
+        <p className="muted" style={{ fontWeight: 800, marginBottom: 10 }}>
+          {hostNote}
+        </p>
+      ) : null}
+
+      {activeRoom ? (
+        <p className="muted" style={{ fontWeight: 800, marginBottom: 10 }}>
+          {isHost
+            ? 'Tap a game to start it for everyone right away.'
+            : 'Host picks the next game — you\'ll jump in automatically.'}
+        </p>
+      ) : null}
+
       <div className="game-grid">
         {GAMES.map((g) => (
           <button
@@ -53,7 +86,7 @@ export function Library({
             type="button"
             className="game-card"
             style={{ borderColor: 'var(--ink)', boxShadow: `0 4px 0 var(--ink)` }}
-            onClick={() => setPicked(g.id)}
+            onClick={() => pickGame(g.id)}
           >
             <span className="emoji" aria-hidden>
               {g.emoji}
@@ -64,52 +97,15 @@ export function Library({
         ))}
       </div>
 
-      {picked ? (
-        <Panel className="join-panel">
-          <p className="h3">{GAMES.find((g) => g.id === picked)?.title}</p>
-          <p className="muted" style={{ marginTop: 4, marginBottom: 12 }}>
-            {GAMES.find((g) => g.id === picked)?.blurb}
-          </p>
-          <div className="stack">
-            <Button variant="gold" block onClick={() => onSolo(picked)}>
-              Play Solo
-            </Button>
-            {activeRoom && onPlayInRoom ? (
-              <Button
-                variant="primary"
-                block
-                onClick={() => {
-                  onPlayInRoom(picked);
-                  setPicked(null);
-                }}
-              >
-                Play with party
-              </Button>
-            ) : (
-              <Button variant="sky" block onClick={() => onCreateRoom(picked)}>
-                Create Room
-              </Button>
-            )}
-            <Button variant="ghost" block onClick={() => setPicked(null)}>
-              Cancel
-            </Button>
-          </div>
-        </Panel>
-      ) : null}
-
-      {!activeRoom && !picked ? (
+      {!activeRoom ? (
         <Panel className="join-panel">
           <p className="h3">Multiplayer</p>
           <p className="muted" style={{ margin: '4px 0 12px' }}>
-            Create a room for any game above, or join a friend&apos;s code.
+            Host a room or join with a friend&apos;s code.
           </p>
           <div className="stack">
-            <Button
-              variant="sky"
-              block
-              onClick={() => onCreateRoom('number-rush')}
-            >
-              Create room
+            <Button variant="sky" block onClick={() => onCreateRoom('number-rush')}>
+              Host room
             </Button>
             <div className="join-row">
               <input
@@ -134,6 +130,47 @@ export function Library({
             </div>
           </div>
         </Panel>
+      ) : null}
+
+      <div style={{ height: 12 }} />
+      <Button variant="ghost" block onClick={onStats}>
+        Stats
+      </Button>
+
+      {picked && !activeRoom ? (
+        <div className="pick-modal" role="dialog" aria-modal="true">
+          <Panel className="pick-sheet">
+            <p className="h3">{GAMES.find((g) => g.id === picked)?.title}</p>
+            <p className="muted" style={{ marginTop: 4, marginBottom: 12 }}>
+              {GAMES.find((g) => g.id === picked)?.blurb}
+            </p>
+            <div className="stack">
+              <Button
+                variant="gold"
+                block
+                onClick={() => {
+                  onSolo(picked);
+                  setPicked(null);
+                }}
+              >
+                Play Solo
+              </Button>
+              <Button
+                variant="sky"
+                block
+                onClick={() => {
+                  onCreateRoom(picked);
+                  setPicked(null);
+                }}
+              >
+                Host multiplayer
+              </Button>
+              <Button variant="ghost" block onClick={() => setPicked(null)}>
+                Cancel
+              </Button>
+            </div>
+          </Panel>
+        </div>
       ) : null}
     </div>
   );

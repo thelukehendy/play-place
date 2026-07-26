@@ -91,3 +91,8 @@
   border-color: var(--gold-dark);
   background: #fff6d0;
 }
+
+.welcome-nick {
+  animation: pop-in 0.35s var(--bounce) both;
+}
+

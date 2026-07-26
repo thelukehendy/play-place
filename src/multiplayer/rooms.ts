@@ -99,6 +99,9 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
     const store = readLocal();
     const room = store[normalized];
     if (!room) throw new Error('Room not found. Check the code.');
+    if (!room.players[player.id] && Object.keys(room.players).length >= 4) {
+      throw new Error('Room is full (max 4 players).');
+    }
     room.players[player.id] = {
       ...player,
       connected: true,
@@ -115,6 +118,9 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
   const snap = await get(roomRef);
   if (!snap.exists()) throw new Error('Room not found. Check the code.');
   const room = snap.val() as RoomData;
+  if (!room.players?.[player.id] && Object.keys(room.players || {}).length >= 4) {
+    throw new Error('Room is full (max 4 players).');
+  }
   const playerRef = ref(db, `rooms/${normalized}/players/${player.id}`);
   await set(playerRef, {
     ...player,
@@ -245,6 +251,47 @@ export async function startMatch(code: string, seed?: number) {
   const snap = await get(ref(db, `rooms/${normalized}/players`));
   const players = (snap.exists() ? snap.val() : {}) as Record<string, RoomPlayer>;
   const updates: Record<string, unknown> = {
+    status: 'playing',
+    seed: nextSeed,
+    scores: {},
+    finished: {},
+    gameState: null,
+    winnerId: null,
+  };
+  for (const id of Object.keys(players)) {
+    updates[`players/${id}/presence`] = 'playing';
+  }
+  await update(ref(db, `rooms/${normalized}`), updates);
+}
+
+/** Host picks a game and everyone jumps into it immediately. */
+export async function startPartyGame(code: string, gameId: string, seed?: number) {
+  const normalized = code.trim().toUpperCase();
+  const nextSeed = seed ?? randomSeed();
+
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    room.gameId = gameId;
+    room.status = 'playing';
+    room.seed = nextSeed;
+    room.scores = {};
+    room.finished = {};
+    room.gameState = null;
+    room.winnerId = null;
+    for (const p of Object.values(room.players)) {
+      p.presence = 'playing';
+    }
+    writeLocal(store);
+    return;
+  }
+
+  const { db } = getFirebase();
+  const snap = await get(ref(db, `rooms/${normalized}/players`));
+  const players = (snap.exists() ? snap.val() : {}) as Record<string, RoomPlayer>;
+  const updates: Record<string, unknown> = {
+    gameId,
     status: 'playing',
     seed: nextSeed,
     scores: {},

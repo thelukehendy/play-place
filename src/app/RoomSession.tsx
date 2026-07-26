@@ -9,7 +9,6 @@ import {
   markFinished,
   playersList,
   rematch,
-  setRoomGame,
   setSharedGameState,
   startMatch,
   subscribeRoom,
@@ -21,14 +20,16 @@ import { Panel } from '../ui/Panel';
 import { Scoreboard } from '../ui/GameChrome';
 import { GAMES } from '../games/registry';
 import { copyText, roomInviteUrl, shareRoomInvite } from '../lib/invite';
+import { recordMultiplayerResult } from '../lib/stats';
 
 type Props = {
   code: string;
   onBrowseGames: () => void;
   onQuitGame: () => void;
+  onHostPickGame: (gameId: string) => void;
 };
 
-export function RoomSession({ code, onBrowseGames, onQuitGame }: Props) {
+export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }: Props) {
   const [room, setRoom] = useState<RoomData | null>(null);
   const [error, setError] = useState('');
   const [inviteNote, setInviteNote] = useState('');
@@ -182,7 +183,7 @@ export function RoomSession({ code, onBrowseGames, onQuitGame }: Props) {
             <select
               className="field"
               value={room.gameId}
-              onChange={(e) => setRoomGame(room.code, e.target.value).catch((err) => setError(String(err)))}
+              onChange={(e) => onHostPickGame(e.target.value)}
               style={{ marginTop: 8 }}
             >
               {GAMES.map((g) => (
@@ -203,29 +204,22 @@ export function RoomSession({ code, onBrowseGames, onQuitGame }: Props) {
               Browse games
             </Button>
           ) : isHost ? (
-            <Button
-              variant="primary"
-              block
-              disabled={
-                game?.modes.includes('turn')
-                  ? players.filter((p) => p.connected).length < 2
-                  : players.filter((p) => p.connected).length < 1
-              }
-              onClick={() => startMatch(room.code).catch((err) => setError(String(err)))}
-            >
-              Start match!
-            </Button>
+            <>
+              <p className="muted" style={{ marginBottom: 8 }}>
+                Pick a game above to start for everyone, or start the current one.
+              </p>
+              <Button
+                variant="primary"
+                block
+                disabled={players.filter((p) => p.connected).length < 1}
+                onClick={() => startMatch(room.code).catch((err) => setError(String(err)))}
+              >
+                Start match!
+              </Button>
+            </>
           ) : (
             <p className="muted">Waiting for host to start…</p>
           )}
-          {room.status === 'lobby' &&
-          isHost &&
-          game?.modes.includes('turn') &&
-          players.filter((p) => p.connected).length < 2 ? (
-            <p className="muted" style={{ marginTop: 8 }}>
-              Need 2 connected players for this game.
-            </p>
-          ) : null}
 
           {room.status === 'lobby' && isHost ? (
             <>
@@ -247,9 +241,7 @@ export function RoomSession({ code, onBrowseGames, onQuitGame }: Props) {
         playerId={player.id}
         isHost={isHost}
         onRematch={() => rematch(room.code).catch((err) => setError(String(err)))}
-        onPickGame={() =>
-          setRoomGame(room.code, room.gameId).catch((err) => setError(String(err)))
-        }
+        onPickGame={(gameId) => onHostPickGame(gameId)}
         onBrowseGames={onBrowseGames}
       />
     );
@@ -288,11 +280,30 @@ function ResultsRoom({
   playerId: string;
   isHost: boolean;
   onRematch: () => void;
-  onPickGame: () => void;
+  onPickGame: (gameId: string) => void;
   onBrowseGames: () => void;
 }) {
   const game = getGame(room.gameId);
   const players = playersList(room).map((p) => ({ id: p.id, name: p.name }));
+
+  useEffect(() => {
+    const scores = room.scores || {};
+    const mine = scores[playerId];
+    if (!mine) return;
+    const primaries = Object.values(scores).map((s) => s.primary);
+    const best = Math.max(...primaries);
+    const winners = Object.entries(scores).filter(([, s]) => s.primary === best);
+    const won = winners.length === 1 && winners[0][0] === playerId;
+    const key = `playplace.recorded.${room.code}.${room.seed}.${room.gameId}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+    recordMultiplayerResult({
+      gameId: room.gameId,
+      primary: mine.primary,
+      won: !!won || room.winnerId === playerId,
+    });
+  }, [room.code, room.seed, room.gameId, room.scores, room.winnerId, playerId]);
+
   return (
     <div className="stack" style={{ animation: 'pop-in 0.35s var(--bounce)' }}>
       <h2
@@ -317,9 +328,20 @@ function ResultsRoom({
         <div style={{ height: 14 }} />
         {isHost ? (
           <div className="stack">
-            <Button variant="primary" block onClick={onPickGame}>
-              Pick next game
-            </Button>
+            <label className="stack">
+              <span className="h3">Switch game (starts for everyone)</span>
+              <select
+                className="field"
+                defaultValue={room.gameId}
+                onChange={(e) => onPickGame(e.target.value)}
+              >
+                {GAMES.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.emoji} {g.title}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Button variant="gold" block onClick={onRematch}>
               Rematch same game
             </Button>
@@ -356,7 +378,7 @@ function RoomPlay({
   onQuitGame: () => void;
 }) {
   const initialState = useMemo(
-    () => game.createInitialState(room.seed, players),
+    () => game.createInitialState(room.seed, players.slice(0, 4)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [room.seed, room.gameId],
   );
@@ -419,8 +441,7 @@ function RoomPlay({
     }
   };
 
-  const livePlayers =
-    game.modes.includes('turn') ? players.slice(0, 2) : players;
+  const livePlayers = players.slice(0, 4);
 
   return (
     <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
@@ -444,12 +465,12 @@ function RoomPlay({
           <game.TurnView
             seed={room.seed}
             player={player}
-            players={players.slice(0, 2)}
+            players={players.slice(0, 4)}
             state={(room.gameState as never) ?? initialState}
             onStateChange={(s) => {
               setSharedGameState(room.code, s).catch((err) => onError(String(err)));
               if (game.getScoresFromState) {
-                const scores = game.getScoresFromState(s, players.slice(0, 2));
+                const scores = game.getScoresFromState(s, players.slice(0, 4));
                 Object.entries(scores).forEach(([id, score]) => {
                   updateScore(room.code, id, score).catch(() => undefined);
                 });
@@ -467,7 +488,7 @@ function RoomPlay({
           <game.RaceView
             seed={room.seed}
             player={player}
-            players={players}
+            players={livePlayers}
             initialState={initialState}
             remoteScores={room.scores || {}}
             finishedPlayers={finishedPlayers}

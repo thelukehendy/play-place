@@ -1,17 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Home } from './Home';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Welcome } from './Welcome';
 import { Library } from './Library';
 import { SoloPlay } from './SoloPlay';
 import { RoomSession } from './RoomSession';
 import { Results } from './Results';
+import { Stats } from './Stats';
 import {
   createRoom,
   getPresence,
   joinRoom,
   leaveRoom,
   quitMatch,
-  setRoomGame,
+  startPartyGame,
   subscribeRoom,
+  type RoomData,
 } from '../multiplayer/rooms';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import type { GameFinishPayload } from '../games/types';
@@ -21,8 +23,9 @@ import { Button } from '../ui/Button';
 const ACTIVE_ROOM_KEY = 'playplace.activeRoom';
 
 type Screen =
-  | { name: 'home' }
+  | { name: 'welcome' }
   | { name: 'library' }
+  | { name: 'stats' }
   | { name: 'solo'; gameId: string; key: number }
   | { name: 'room' }
   | {
@@ -48,16 +51,16 @@ function readStoredRoom(): string | null {
 }
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>({ name: 'home' });
-  const [roomCode, setRoomCode] = useState<string | null>(
-    () => readRoomFromUrl() ?? readStoredRoom(),
-  );
+  const inviteCode = useRef(readRoomFromUrl()).current;
+  const [screen, setScreen] = useState<Screen>({ name: 'welcome' });
+  const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [roomSnap, setRoomSnap] = useState<RoomData | null>(null);
   const [matchKey, setMatchKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const goLibrary = useCallback(() => setScreen({ name: 'library' }), []);
-  const goHome = useCallback(() => setScreen({ name: 'home' }), []);
+  const goHome = useCallback(() => setScreen({ name: 'welcome' }), []);
 
   const bindRoom = useCallback((code: string) => {
     const normalized = code.toUpperCase();
@@ -70,6 +73,7 @@ export function App() {
 
   const clearRoomBinding = useCallback(() => {
     setRoomCode(null);
+    setRoomSnap(null);
     setMatchKey('');
     localStorage.removeItem(ACTIVE_ROOM_KEY);
     const url = new URL(window.location.href);
@@ -77,41 +81,12 @@ export function App() {
     window.history.replaceState({}, '', url.toString());
   }, []);
 
-  useEffect(() => {
-    const code = readRoomFromUrl() ?? readStoredRoom();
-    if (!code) return;
-    let cancelled = false;
-    (async () => {
-      setBusy(true);
-      try {
-        const player = { id: getOrCreatePlayerId(), name: ensureNickname() };
-        await joinRoom(code, player);
-        if (!cancelled) {
-          bindRoom(code);
-          setScreen({ name: 'room' });
-        }
-      } catch (err) {
-        if (!cancelled) {
-          clearRoomBinding();
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      } finally {
-        if (!cancelled) setBusy(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // only on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Keep every linked device on the live match whenever a game starts —
-  // even if they were on Home, Library, Solo, etc.
+  // Live party sync: jump everyone into the same match / results.
   useEffect(() => {
     if (!roomCode) return;
     const playerId = getOrCreatePlayerId();
     return subscribeRoom(roomCode, (room) => {
+      setRoomSnap(room);
       if (!room) return;
 
       if (room.status === 'playing') {
@@ -130,6 +105,42 @@ export function App() {
       }
     });
   }, [roomCode]);
+
+  const finishWelcome = async () => {
+    ensureNickname();
+    const code = inviteCode ?? readStoredRoom();
+    if (inviteCode) {
+      setBusy(true);
+      setError('');
+      try {
+        const player = { id: getOrCreatePlayerId(), name: ensureNickname() };
+        await joinRoom(inviteCode, player);
+        bindRoom(inviteCode);
+        setScreen({ name: 'room' });
+      } catch (err) {
+        clearRoomBinding();
+        setError(err instanceof Error ? err.message : String(err));
+        setScreen({ name: 'library' });
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (code) {
+      // Restore party link quietly, then show games list.
+      setBusy(true);
+      try {
+        const player = { id: getOrCreatePlayerId(), name: ensureNickname() };
+        await joinRoom(code, player);
+        bindRoom(code);
+      } catch {
+        clearRoomBinding();
+      } finally {
+        setBusy(false);
+      }
+    }
+    setScreen({ name: 'library' });
+  };
 
   const handleCreate = async (gameId: string) => {
     setBusy(true);
@@ -165,7 +176,7 @@ export function App() {
     const code = roomCode;
     const playerId = getOrCreatePlayerId();
     clearRoomBinding();
-    setScreen({ name: 'home' });
+    setScreen({ name: 'library' });
     if (code) {
       try {
         await leaveRoom(code, playerId);
@@ -194,7 +205,7 @@ export function App() {
     setBusy(true);
     setError('');
     try {
-      await setRoomGame(roomCode, gameId);
+      await startPartyGame(roomCode, gameId);
       setScreen({ name: 'room' });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -202,6 +213,9 @@ export function App() {
       setBusy(false);
     }
   };
+
+  const playerId = getOrCreatePlayerId();
+  const isHost = !!(roomSnap && roomSnap.hostId === playerId);
 
   return (
     <div className="app-shell">
@@ -221,19 +235,14 @@ export function App() {
         </Panel>
       ) : null}
 
-      {busy && screen.name === 'home' ? (
+      {busy && screen.name === 'welcome' ? (
         <Panel>
           <p className="muted">Joining room…</p>
         </Panel>
       ) : null}
 
-      {screen.name === 'home' ? (
-        <Home
-          onPlay={goLibrary}
-          activeRoom={roomCode}
-          onLobby={() => setScreen({ name: 'room' })}
-          onQuitMultiplayer={quitMultiplayer}
-        />
+      {screen.name === 'welcome' ? (
+        <Welcome invited={!!inviteCode} onContinue={() => finishWelcome()} />
       ) : null}
 
       {screen.name === 'library' ? (
@@ -243,11 +252,15 @@ export function App() {
           onCreateRoom={handleCreate}
           onJoinRoom={handleJoin}
           activeRoom={roomCode}
+          isHost={isHost}
           onLobby={() => setScreen({ name: 'room' })}
           onQuitMultiplayer={quitMultiplayer}
           onPlayInRoom={playInRoom}
+          onStats={() => setScreen({ name: 'stats' })}
         />
       ) : null}
+
+      {screen.name === 'stats' ? <Stats onBack={goLibrary} /> : null}
 
       {screen.name === 'solo' ? (
         <SoloPlay
@@ -277,6 +290,7 @@ export function App() {
           code={roomCode}
           onBrowseGames={goLibrary}
           onQuitGame={quitGame}
+          onHostPickGame={playInRoom}
         />
       ) : null}
     </div>

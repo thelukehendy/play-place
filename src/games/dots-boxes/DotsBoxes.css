@@ -54,6 +54,16 @@
   background: var(--green);
 }
 
+.dab-h.p3,
+.dab-v.p3 {
+  background: var(--sky);
+}
+
+.dab-h.p4,
+.dab-v.p4 {
+  background: var(--gold);
+}
+
 .dab-box {
   flex: 1;
   height: 48px;
@@ -71,6 +81,16 @@
 .dab-box.p2 {
   background: rgba(67, 176, 71, 0.25);
   color: var(--green-dark);
+}
+
+.dab-box.p3 {
+  background: rgba(4, 156, 216, 0.25);
+  color: #036a96;
+}
+
+.dab-box.p4 {
+  background: rgba(245, 197, 24, 0.35);
+  color: #8a6a00;
 }
 
 .dab-turn {
