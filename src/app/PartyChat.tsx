@@ -87,10 +87,13 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [toasts, setToasts] = useState<(ChatMessage & { id: string })[]>([]);
+  /** Fixed sheet height in px, captured when opening (before keyboard). */
+  const [sheetPx, setSheetPx] = useState(320);
   const seen = useRef<Set<string>>(new Set());
   const bootstrapped = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollLockY = useRef(0);
   const player = useMemo(
     () => ({ id: getOrCreatePlayerId(), name: ensureNickname() }),
     [],
@@ -100,23 +103,26 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     if (!code) {
       setRoom(null);
       setOpen(false);
+      setToasts([]);
+      bootstrapped.current = false;
+      seen.current = new Set();
       return;
     }
+    // New room/session: forget prior messages so history never toasts as "new".
     bootstrapped.current = false;
     seen.current = new Set();
     setToasts([]);
+    setRoom(null);
     const unsub = subscribeRoom(code, setRoom);
     return () => unsub();
   }, [code]);
 
   const messages = room && code ? chatList(room) : [];
 
+  // Seed "seen" from the first real room snapshot only — never toast history
+  // (including the race where chat is empty on the first empty tick).
   useEffect(() => {
-    if (!code) return;
-    if (!messages.length) {
-      bootstrapped.current = true;
-      return;
-    }
+    if (!code || !room) return;
     if (!bootstrapped.current) {
       messages.forEach((m) => seen.current.add(m.id));
       bootstrapped.current = true;
@@ -132,12 +138,60 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
         setToasts((t) => t.filter((x) => x.id !== m.id));
       }, TOAST_MS);
     });
-  }, [messages, player.id, code]);
+  }, [messages, player.id, code, room]);
 
-  // Focus once when opening — never on each send (that jumps the keyboard).
+  // Lock page scroll + freeze sheet height while chat is open so the keyboard
+  // cannot shove the lobby (or the sheet) around.
   useEffect(() => {
     if (!open) return;
-    const t = window.setTimeout(() => inputRef.current?.focus(), 40);
+
+    const h = Math.min(Math.round(window.innerHeight * 0.48), 420);
+    setSheetPx(Math.max(260, h));
+
+    scrollLockY.current = window.scrollY || window.pageYOffset || 0;
+    const body = document.body;
+    const html = document.documentElement;
+    const prevBody = body.style.cssText;
+    const prevHtmlOverflow = html.style.overflow;
+    body.style.cssText = [
+      'position:fixed',
+      'width:100%',
+      `top:-${scrollLockY.current}px`,
+      'left:0',
+      'right:0',
+      'overflow:hidden',
+    ].join(';');
+    html.style.overflow = 'hidden';
+
+    const keepScrollPinned = () => {
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+      const vv = window.visualViewport;
+      // If the visual viewport pans (iOS keyboard), nudge overlay stays put via CSS.
+      if (vv && (vv.offsetTop !== 0 || vv.pageTop !== 0)) {
+        window.scrollTo(0, 0);
+      }
+    };
+    window.addEventListener('scroll', keepScrollPinned, { passive: true });
+    const vv = window.visualViewport;
+    vv?.addEventListener('scroll', keepScrollPinned, { passive: true });
+    vv?.addEventListener('resize', keepScrollPinned, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', keepScrollPinned);
+      vv?.removeEventListener('scroll', keepScrollPinned);
+      vv?.removeEventListener('resize', keepScrollPinned);
+      body.style.cssText = prevBody;
+      html.style.overflow = prevHtmlOverflow;
+      window.scrollTo(0, scrollLockY.current);
+    };
+  }, [open]);
+
+  // Focus once when opening — preventScroll so iOS doesn't pan the page.
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => {
+      inputRef.current?.focus({ preventScroll: true });
+    }, 40);
     return () => clearTimeout(t);
   }, [open]);
 
@@ -185,13 +239,18 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     setDraft('');
     sfxTap();
     // Keep keyboard open — do not blur on send.
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
     try {
       await sendChatMessage(code, player, text);
     } catch {
       /* ignore */
     }
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
+  };
+
+  const closeChat = () => {
+    setOpen(false);
+    setDraft('');
   };
 
   return (
@@ -215,27 +274,19 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
           aria-modal="true"
           onMouseDown={(e) => {
             // Backdrop click closes; ignore presses inside the sheet.
-            if (e.target === e.currentTarget) {
-              setOpen(false);
-              setDraft('');
-            }
+            if (e.target === e.currentTarget) closeChat();
           }}
         >
           <div
             className="chat-sheet"
+            style={{ height: sheetPx, maxHeight: sheetPx }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="chat-sheet-head">
               <p className="h3" style={{ margin: 0 }}>
                 Party chat
               </p>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setOpen(false);
-                  setDraft('');
-                }}
-              >
+              <Button variant="ghost" onClick={closeChat}>
                 Close
               </Button>
             </div>
@@ -268,6 +319,10 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
                 className="field"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                onFocus={() => {
+                  // iOS sometimes scrolls the page on focus — pin immediately.
+                  window.scrollTo(0, 0);
+                }}
                 placeholder="Message the party…"
                 maxLength={200}
                 enterKeyHint="send"

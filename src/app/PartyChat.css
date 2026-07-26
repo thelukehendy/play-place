@@ -76,23 +76,30 @@
 }
 
 .chat-overlay {
+  /* Pin to the layout viewport — do not follow the visual viewport / keyboard. */
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
   z-index: 70;
   background: rgba(20, 40, 80, 0.45);
-  /* Sheet sits in the top half; do not track keyboard viewport (avoids jump on send). */
   display: block;
   padding: calc(10px + var(--safe-top, env(safe-area-inset-top, 0px))) 12px 12px;
   box-sizing: border-box;
   pointer-events: auto;
+  /* Stop iOS from scrolling this layer when the input is focused. */
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .chat-sheet {
   width: min(480px, 100%);
   margin: 0 auto;
-  /* Top half of the layout viewport — stable while the keyboard is open. */
-  height: min(50dvh, 420px);
-  max-height: min(50dvh, 420px);
+  /* Height is set inline from a pre-keyboard window.innerHeight snapshot. */
   background: var(--cream);
   border: 4px solid var(--ink);
   border-radius: var(--radius-lg);
@@ -101,8 +108,9 @@
   flex-direction: column;
   overflow: hidden;
   animation: pop-in 0.28s var(--bounce) both;
-  /* Keep sheet geometry fixed; only the message list scrolls. */
   flex-shrink: 0;
+  /* Allow scrolling inside the message list only. */
+  touch-action: manipulation;
 }
 
 .chat-sheet-head {
@@ -124,6 +132,8 @@
   flex-direction: column;
   gap: 8px;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .chat-bubble {
@@ -164,5 +174,5 @@
 
 .chat-compose .field {
   flex: 1;
-  font-size: 16px;
+  font-size: 16px; /* avoid iOS zoom-on-focus */
 }
