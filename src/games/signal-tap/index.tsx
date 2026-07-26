@@ -5,7 +5,7 @@ import { GameHud, Rules, Stat } from '../../ui/GameChrome';
 import './SignalTap.css';
 
 const ROUNDS = 5;
-/** Extra delay added to the total for each early tap. */
+/** Extra delay added to the total for each tap while the pad is not green. */
 const FALSE_START_PENALTY_MS = 1000;
 
 export type SignalState = {
@@ -43,6 +43,7 @@ function useSignal(
   onProgress?: (totalMs: number, round: number) => void,
 ) {
   const [state, setState] = useState(initial);
+  const [penaltyFlash, setPenaltyFlash] = useState(0);
   const done = useRef(false);
   const rng = useRef(createRng(initial.seed));
   const waitTimer = useRef<number | null>(null);
@@ -50,6 +51,7 @@ function useSignal(
   useEffect(() => {
     setState(initial);
     done.current = false;
+    setPenaltyFlash(0);
     rng.current = createRng(initial.seed);
     if (waitTimer.current) clearTimeout(waitTimer.current);
   }, [initial]);
@@ -82,25 +84,33 @@ function useSignal(
 
   const tap = () => {
     if (done.current || state.finishedAt) return;
+
     setState((s) => {
-      if (s.phase === 'wait') {
+      if (s.finishedAt || s.phase === 'done') return s;
+
+      // Non-green press: add delay penalty (does not advance the round).
+      if (s.phase !== 'go' || !s.goAt) {
         const totalMs = s.totalMs + FALSE_START_PENALTY_MS;
-        onProgress?.(totalMs, s.round);
-        return {
-          ...s,
-          falseStarts: s.falseStarts + 1,
-          totalMs,
-        };
+        const falseStarts = s.falseStarts + 1;
+        queueMicrotask(() => {
+          setPenaltyFlash((n) => n + 1);
+          onProgress?.(totalMs, s.round);
+        });
+        return { ...s, totalMs, falseStarts };
       }
-      if (s.phase !== 'go' || !s.goAt) return s;
+
       const ms = Date.now() - s.goAt;
       const roundMs = [...s.roundMs, ms];
       const totalMs = s.totalMs + ms;
       const round = s.round + 1;
-      onProgress?.(totalMs, round);
+
       if (round >= ROUNDS) {
         done.current = true;
-        const finished = {
+        queueMicrotask(() => {
+          onProgress?.(totalMs, round);
+          onFinish(totalMs);
+        });
+        return {
           ...s,
           totalMs,
           round,
@@ -108,14 +118,17 @@ function useSignal(
           phase: 'done' as const,
           finishedAt: Date.now(),
         };
-        queueMicrotask(() => onFinish(totalMs));
-        return finished;
       }
-      return armRound({ ...s, totalMs, round, roundMs, phase: 'wait' }, s.startedAt ?? Date.now());
+
+      queueMicrotask(() => onProgress?.(totalMs, round));
+      return armRound(
+        { ...s, totalMs, round, roundMs, phase: 'wait' },
+        s.startedAt ?? Date.now(),
+      );
     });
   };
 
-  return { state, tap };
+  return { state, tap, penaltyFlash, penaltyMs: FALSE_START_PENALTY_MS };
 }
 
 function View({
@@ -129,7 +142,11 @@ function View({
   onProgress?: (totalMs: number, round: number) => void;
   footer?: ReactNode;
 }) {
-  const { state, tap } = useSignal(initialState, onFinish, onProgress);
+  const { state, tap, penaltyFlash, penaltyMs } = useSignal(
+    initialState,
+    onFinish,
+    onProgress,
+  );
 
   return (
     <div>
@@ -139,10 +156,13 @@ function View({
           Round {Math.min(state.round + 1, ROUNDS)}/{ROUNDS}
         </Stat>
       </GameHud>
-      <Rules text="Wait for GREEN, then tap fast. Lowest total delay wins. Early taps add 1000ms." />
+      <Rules
+        text={`Wait for GREEN, then tap. Non-green taps add +${penaltyMs}ms. Lowest total wins.`}
+      />
       <button
         type="button"
-        className={`signal-pad signal-${state.phase}`}
+        className={`signal-pad signal-${state.phase}${penaltyFlash ? ' signal-penalty' : ''}`}
+        key={penaltyFlash ? `pen-${penaltyFlash}` : 'pad'}
         onClick={tap}
         disabled={state.phase === 'done'}
       >
@@ -153,6 +173,7 @@ function View({
       </button>
       <p className="signal-meta">
         False starts: {state.falseStarts}
+        {state.falseStarts > 0 ? ` (+${state.falseStarts * penaltyMs}ms)` : ''}
         {state.roundMs.length
           ? ` · Last ${state.roundMs[state.roundMs.length - 1]}ms`
           : ''}
@@ -218,7 +239,7 @@ export const signalTapGame: GameDefinition<SignalState> = {
   emoji: '🚦',
   accent: 'var(--green)',
   modes: ['solo', 'race'],
-  rules: 'Wait for green, then tap. Lowest total delay wins.',
+  rules: 'Wait for green, then tap. Non-green taps add a delay penalty.',
   createInitialState: (seed) => createSignalState(seed),
   SoloView,
   RaceView,
