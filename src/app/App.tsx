@@ -6,11 +6,13 @@ import { RoomSession } from './RoomSession';
 import { Results } from './Results';
 import { Stats } from './Stats';
 import {
+  allConnectedReady,
   createRoom,
   getPresence,
   joinRoom,
   leaveRoom,
   quitMatch,
+  setRoomGame,
   startPartyGame,
   subscribeRoom,
   type RoomData,
@@ -89,12 +91,15 @@ export function App() {
       setRoomSnap(room);
       if (!room) return;
 
-      if (room.status === 'playing') {
+      if (room.status === 'playing' || room.status === 'countdown') {
         const me = room.players?.[playerId];
         const optedOut =
-          !!me && getPresence(me) === 'lobby' && !!room.finished?.[playerId];
+          !!me &&
+          room.status === 'playing' &&
+          getPresence(me) === 'lobby' &&
+          !!room.finished?.[playerId];
         if (optedOut) return;
-        setMatchKey(`${room.gameId}:${room.seed}`);
+        setMatchKey(`${room.gameId}:${room.seed}:${room.status}`);
         setScreen((current) => (current.name === 'room' ? current : { name: 'room' }));
         return;
       }
@@ -205,8 +210,13 @@ export function App() {
     setBusy(true);
     setError('');
     try {
-      await startPartyGame(roomCode, gameId);
-      setScreen({ name: 'room' });
+      if (roomSnap && !allConnectedReady(roomSnap)) {
+        await setRoomGame(roomCode, gameId);
+        setScreen({ name: 'room' });
+      } else {
+        await startPartyGame(roomCode, gameId);
+        setScreen({ name: 'room' });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -216,6 +226,7 @@ export function App() {
 
   const playerId = getOrCreatePlayerId();
   const isHost = !!(roomSnap && roomSnap.hostId === playerId);
+  const hostDisplayName = roomSnap?.players?.[roomSnap.hostId]?.name ?? 'Host';
 
   return (
     <div className="app-shell">
@@ -253,6 +264,7 @@ export function App() {
           onJoinRoom={handleJoin}
           activeRoom={roomCode}
           isHost={isHost}
+          hostDisplayName={hostDisplayName}
           onLobby={() => setScreen({ name: 'room' })}
           onQuitMultiplayer={quitMultiplayer}
           onPlayInRoom={playInRoom}

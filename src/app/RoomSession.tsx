@@ -4,11 +4,14 @@ import type { GameFinishPayload, ScoreValue } from '../games/types';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import { isFirebaseConfigured } from '../multiplayer/firebase';
 import {
+  allConnectedReady,
   finishTurnGame,
   getPresence,
+  hostName,
   markFinished,
   playersList,
   rematch,
+  setPlayerReady,
   setSharedGameState,
   startMatch,
   subscribeRoom,
@@ -20,7 +23,8 @@ import { Panel } from '../ui/Panel';
 import { Scoreboard } from '../ui/GameChrome';
 import { GAMES } from '../games/registry';
 import { copyText, roomInviteUrl, shareRoomInvite } from '../lib/invite';
-import { recordMultiplayerResult } from '../lib/stats';
+import { recordMultiplayerMatch } from '../lib/stats';
+import { sfxCountdown, sfxFinish, sfxGo, sfxReady } from '../lib/sfx';
 
 type Props = {
   code: string;
@@ -28,6 +32,16 @@ type Props = {
   onQuitGame: () => void;
   onHostPickGame: (gameId: string) => void;
 };
+
+function useNow(active: boolean, intervalMs = 100) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [active, intervalMs]);
+  return now;
+}
 
 export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }: Props) {
   const [room, setRoom] = useState<RoomData | null>(null);
@@ -37,6 +51,7 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
     () => ({ id: getOrCreatePlayerId(), name: ensureNickname() }),
     [],
   );
+  const now = useNow(!!room && (room.status === 'countdown' || room.status === 'playing'));
 
   useEffect(() => {
     const unsub = subscribeRoom(code, setRoom);
@@ -65,19 +80,35 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
   const game = getGame(room.gameId);
   const me = room.players?.[player.id];
   const myPresence = me ? getPresence(me) : 'lobby';
-  // Stay out of a live match only after Quit game. Anyone else in a playing
-  // room enters the match — presence alone is not enough to sit out.
   const optedOutOfMatch =
     room.status === 'playing' &&
     myPresence === 'lobby' &&
     !!room.finished?.[player.id];
 
+  const countdownEnds = room.countdownEndsAt ?? 0;
+  const inCountdown = room.status === 'countdown' && now < countdownEnds;
+  const matchLive =
+    room.status === 'playing' || (room.status === 'countdown' && now >= countdownEnds);
+
+  if (inCountdown && game) {
+    return (
+      <CountdownScreen
+        room={room}
+        gameTitle={`${game.emoji} ${game.title}`}
+        endsAt={countdownEnds}
+        now={now}
+      />
+    );
+  }
+
   if (room.status === 'lobby' || optedOutOfMatch) {
+    const readyOk = allConnectedReady(room);
+    const amReady = !!me?.ready;
     return (
       <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
         <div className="row" style={{ color: 'var(--cream)', textShadow: '1px 1px 0 var(--ink)' }}>
           <h2 className="h2" style={{ flex: 1, color: 'var(--gold)' }}>
-            Lobby · {room.code}
+            Party lobby
           </h2>
           <Button variant="ghost" onClick={onBrowseGames}>
             Games
@@ -86,38 +117,16 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
         <Panel>
           {!isFirebaseConfigured() ? (
             <p className="muted" style={{ marginBottom: 10 }}>
-              Demo mode: rooms stay on this device only. Add Firebase for real friend play — see README.
+              Demo mode: rooms stay on this device only.
             </p>
           ) : null}
 
-          {room.status === 'playing' ? (
-            <p className="muted" style={{ marginBottom: 8 }}>
-              You&apos;re in the lobby. Friends still in the match keep playing — you&apos;ll see results
-              when they finish, or browse games anytime.
-            </p>
-          ) : (
-            <p className="muted" style={{ marginBottom: 8 }}>
-              Party stays linked after each match. Quit multiplayer from the games screen when
-              you&apos;re done.
-            </p>
-          )}
-
-          <p className="h3">Share invite</p>
-          <p
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '2.4rem',
-              fontWeight: 800,
-              letterSpacing: '0.18em',
-              margin: '8px 0 12px',
-              textAlign: 'center',
-              color: 'var(--red)',
-            }}
-          >
-            {room.code}
+          <p className="h3" style={{ textAlign: 'center' }}>
+            Join code
           </p>
-          <p className="muted" style={{ marginBottom: 10, wordBreak: 'break-all' }}>
-            {roomInviteUrl(room.code)}
+          <p className="join-code-hero">{room.code}</p>
+          <p className="muted" style={{ marginBottom: 10, wordBreak: 'break-all', textAlign: 'center' }}>
+            Friends enter this same code — or open {roomInviteUrl(room.code)}
           </p>
           <div className="stack">
             <Button
@@ -129,22 +138,22 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
                   result === 'shared'
                     ? 'Invite shared!'
                     : result === 'copied'
-                      ? 'Invite link copied — friends open it to join this room.'
-                      : 'Could not share. Copy the link above.',
+                      ? 'Invite link copied.'
+                      : 'Could not share.',
                 );
               }}
             >
-              Share / copy invite link
+              Share invite
             </Button>
             <Button
               variant="ghost"
               block
               onClick={async () => {
                 const ok = await copyText(room.code);
-                setInviteNote(ok ? `Code ${room.code} copied.` : 'Could not copy code.');
+                setInviteNote(ok ? `Join code ${room.code} copied.` : 'Could not copy.');
               }}
             >
-              Copy code only
+              Copy join code
             </Button>
           </div>
           {inviteNote ? (
@@ -159,13 +168,13 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
             {players.map((p) => {
               const presence = getPresence(p);
               let status = '';
-              if (!p.connected) status = ' (away)';
-              else if (room.status === 'playing' && presence === 'playing') status = ' (playing)';
-              else status = ' (lobby)';
+              if (!p.connected) status = ' · away';
+              else if (room.status === 'playing' && presence === 'playing') status = ' · playing';
+              else status = p.ready ? ' · ready ✓' : ' · not ready';
               return (
                 <li key={p.id}>
                   {p.name}
-                  {p.id === room.hostId ? ' 👑' : ''}
+                  {p.id === room.hostId ? ' 👑 host' : ''}
                   {p.id === player.id ? ' (you)' : ''}
                   {status}
                 </li>
@@ -173,18 +182,41 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
             })}
           </ul>
 
+          <div style={{ height: 12 }} />
+          <Button
+            variant={amReady ? 'green' : 'sky'}
+            block
+            onClick={() => {
+              sfxReady();
+              setPlayerReady(room.code, player.id, !amReady).catch((err) => setError(String(err)));
+            }}
+          >
+            {amReady ? 'Ready ✓' : 'Ready up'}
+          </Button>
+
           <div style={{ height: 14 }} />
           <p className="h3">Game</p>
+          <p className="muted" style={{ margin: '4px 0 8px' }}>
+            {isHost
+              ? 'You pick the games for the party.'
+              : `${hostName(room)} picks the games — hang tight.`}
+          </p>
           {room.status === 'playing' ? (
-            <p style={{ fontWeight: 800, marginTop: 8 }}>
+            <p style={{ fontWeight: 800 }}>
               {game?.emoji} {game?.title ?? room.gameId} — in progress
             </p>
           ) : isHost ? (
             <select
               className="field"
               value={room.gameId}
-              onChange={(e) => onHostPickGame(e.target.value)}
-              style={{ marginTop: 8 }}
+              onChange={(e) => {
+                if (!readyOk) {
+                  setError('Everyone must ready up before starting.');
+                  return;
+                }
+                onHostPickGame(e.target.value);
+              }}
+              style={{ marginTop: 4 }}
             >
               {GAMES.map((g) => (
                 <option key={g.id} value={g.id}>
@@ -193,7 +225,7 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
               ))}
             </select>
           ) : (
-            <p style={{ fontWeight: 800, marginTop: 8 }}>
+            <p style={{ fontWeight: 800 }}>
               {game?.emoji} {game?.title ?? room.gameId}
             </p>
           )}
@@ -205,30 +237,26 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
             </Button>
           ) : isHost ? (
             <>
-              <p className="muted" style={{ marginBottom: 8 }}>
-                Pick a game above to start for everyone, or start the current one.
-              </p>
+              {!readyOk ? (
+                <p className="muted" style={{ marginBottom: 8 }}>
+                  Waiting for everyone to ready up before start.
+                </p>
+              ) : null}
               <Button
                 variant="primary"
                 block
-                disabled={players.filter((p) => p.connected).length < 1}
-                onClick={() => startMatch(room.code).catch((err) => setError(String(err)))}
+                disabled={!readyOk}
+                onClick={() => {
+                  if (!readyOk) return;
+                  startMatch(room.code).catch((err) => setError(String(err)));
+                }}
               >
                 Start match!
               </Button>
             </>
           ) : (
-            <p className="muted">Waiting for host to start…</p>
+            <p className="muted">Waiting for {hostName(room)} to start…</p>
           )}
-
-          {room.status === 'lobby' && isHost ? (
-            <>
-              <div style={{ height: 10 }} />
-              <Button variant="sky" block onClick={onBrowseGames}>
-                Browse other games
-              </Button>
-            </>
-          ) : null}
         </Panel>
       </div>
     );
@@ -240,7 +268,13 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
         room={room}
         playerId={player.id}
         isHost={isHost}
-        onRematch={() => rematch(room.code).catch((err) => setError(String(err)))}
+        onRematch={() => {
+          if (!allConnectedReady(room)) {
+            setError('Everyone must ready up for a rematch.');
+            return;
+          }
+          rematch(room.code).catch((err) => setError(String(err)));
+        }}
         onPickGame={(gameId) => onHostPickGame(gameId)}
         onBrowseGames={onBrowseGames}
       />
@@ -256,6 +290,14 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
     );
   }
 
+  if (!matchLive && room.status !== 'playing') {
+    return (
+      <Panel>
+        <p className="muted">Getting ready…</p>
+      </Panel>
+    );
+  }
+
   return (
     <RoomPlay
       room={room}
@@ -265,6 +307,53 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
       onError={setError}
       onQuitGame={onQuitGame}
     />
+  );
+}
+
+function CountdownScreen({
+  room,
+  gameTitle,
+  endsAt,
+  now,
+}: {
+  room: RoomData;
+  gameTitle: string;
+  endsAt: number;
+  now: number;
+}) {
+  const left = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  const last = useRef<number | null>(null);
+  useEffect(() => {
+    if (left !== last.current) {
+      last.current = left;
+      if (left > 0) sfxCountdown(left);
+      else sfxGo();
+    }
+  }, [left]);
+
+  return (
+    <div className="stack" style={{ animation: 'pop-in 0.25s var(--bounce)' }}>
+      <Panel style={{ textAlign: 'center', padding: '28px 16px' }}>
+        <p className="h3">{gameTitle}</p>
+        <p className="muted" style={{ margin: '8px 0 4px' }}>
+          Join code {room.code}
+        </p>
+        <p
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '4.5rem',
+            fontWeight: 800,
+            margin: '12px 0',
+            color: 'var(--red)',
+          }}
+        >
+          {left > 0 ? left : 'GO!'}
+        </p>
+        <p className="muted" style={{ fontWeight: 800 }}>
+          Everyone starts together
+        </p>
+      </Panel>
+    </div>
   );
 }
 
@@ -284,25 +373,32 @@ function ResultsRoom({
   onBrowseGames: () => void;
 }) {
   const game = getGame(room.gameId);
-  const players = playersList(room).map((p) => ({ id: p.id, name: p.name }));
+  const players = playersList(room);
+  const boardPlayers = players.map((p) => ({ id: p.id, name: p.name }));
+  const readyOk = allConnectedReady(room);
+  const me = room.players?.[playerId];
+  const amReady = !!me?.ready;
 
   useEffect(() => {
     const scores = room.scores || {};
-    const mine = scores[playerId];
-    if (!mine) return;
-    const primaries = Object.values(scores).map((s) => s.primary);
-    const best = Math.max(...primaries);
-    const winners = Object.entries(scores).filter(([, s]) => s.primary === best);
-    const won = winners.length === 1 && winners[0][0] === playerId;
+    if (!Object.keys(scores).length) return;
     const key = `playplace.recorded.${room.code}.${room.seed}.${room.gameId}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
-    recordMultiplayerResult({
+    sfxFinish();
+    recordMultiplayerMatch({
       gameId: room.gameId,
-      primary: mine.primary,
-      won: !!won || room.winnerId === playerId,
+      code: room.code,
+      localPlayerId: playerId,
+      winnerId: room.winnerId,
+      players: players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        primary: scores[p.id]?.primary ?? 0,
+        label: scores[p.id]?.label,
+      })),
     });
-  }, [room.code, room.seed, room.gameId, room.scores, room.winnerId, playerId]);
+  }, [room, playerId, players]);
 
   return (
     <div className="stack" style={{ animation: 'pop-in 0.35s var(--bounce)' }}>
@@ -321,41 +417,69 @@ function ResultsRoom({
         <p className="h3" style={{ marginBottom: 10 }}>
           {game?.emoji} {game?.title}
         </p>
-        <Scoreboard players={players} scores={room.scores || {}} youId={playerId} />
-        <p className="muted" style={{ margin: '12px 0 0' }}>
-          Party still linked in room <strong>{room.code}</strong>
+        <Scoreboard players={boardPlayers} scores={room.scores || {}} youId={playerId} />
+        <p className="muted" style={{ margin: '12px 0 0', textAlign: 'center' }}>
+          Join code <strong>{room.code}</strong> · party still linked
         </p>
+
+        <div style={{ height: 12 }} />
+        <p className="h3">Ready for next?</p>
+        <ul style={{ paddingLeft: 18, fontWeight: 700, marginBottom: 10 }}>
+          {players.map((p) => (
+            <li key={p.id}>
+              {p.name}
+              {p.id === room.hostId ? ' 👑' : ''}
+              {p.ready ? ' ✓ ready' : ' …'}
+            </li>
+          ))}
+        </ul>
+        <Button
+          variant={amReady ? 'green' : 'sky'}
+          block
+          onClick={() => {
+            sfxReady();
+            setPlayerReady(room.code, playerId, !amReady).catch(() => undefined);
+          }}
+        >
+          {amReady ? 'Ready ✓' : 'Ready up'}
+        </Button>
+
         <div style={{ height: 14 }} />
         {isHost ? (
           <div className="stack">
-            <label className="stack">
-              <span className="h3">Switch game (starts for everyone)</span>
-              <select
-                className="field"
-                defaultValue={room.gameId}
-                onChange={(e) => onPickGame(e.target.value)}
-              >
-                {GAMES.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.emoji} {g.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button variant="gold" block onClick={onRematch}>
-              Rematch same game
+            <p className="muted">
+              You pick the next game
+              {!readyOk ? ' — wait for everyone to ready up.' : '.'}
+            </p>
+            <select
+              className="field"
+              defaultValue={room.gameId}
+              disabled={!readyOk}
+              onChange={(e) => onPickGame(e.target.value)}
+            >
+              {GAMES.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.emoji} {g.title}
+                </option>
+              ))}
+            </select>
+            <Button variant="gold" block disabled={!readyOk} onClick={onRematch}>
+              Rematch
             </Button>
-            <Button variant="sky" block onClick={onBrowseGames}>
-              Browse all games
+            <Button variant="ghost" block onClick={onBrowseGames}>
+              Browse games
             </Button>
           </div>
         ) : (
-          <p className="muted">Waiting for host to pick the next game…</p>
+          <div className="stack">
+            <p className="muted">
+              {hostName(room)} picks the next game. You stay in the party.
+            </p>
+            <Button variant="ghost" block onClick={onBrowseGames}>
+              Browse games
+            </Button>
+          </div>
         )}
-        <div style={{ height: 8 }} />
-        <Button variant="ghost" block onClick={onBrowseGames}>
-          Games (stay in party)
-        </Button>
       </Panel>
     </div>
   );
@@ -393,7 +517,6 @@ function RoomPlay({
     .filter(([, v]) => v)
     .map(([id]) => id);
 
-  // Seed a starting score so opponents appear immediately
   useEffect(() => {
     if (room.scores?.[player.id]) return;
     updateScore(room.code, player.id, {
@@ -453,6 +576,9 @@ function RoomPlay({
           Quit game
         </Button>
       </div>
+      <p className="muted" style={{ textAlign: 'center', fontWeight: 800, marginTop: -4 }}>
+        Join code {room.code}
+      </p>
       <Panel>
         <Scoreboard
           title="Match status"

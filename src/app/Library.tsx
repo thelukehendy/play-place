@@ -12,9 +12,9 @@ type Props = {
   onJoinRoom: (code: string) => void;
   activeRoom?: string | null;
   isHost?: boolean;
+  hostDisplayName?: string;
   onLobby?: () => void;
   onQuitMultiplayer?: () => void;
-  /** In a party: host tapping a game starts it for everyone. */
   onPlayInRoom?: (gameId: string) => void;
   onStats: () => void;
 };
@@ -26,6 +26,7 @@ export function Library({
   onJoinRoom,
   activeRoom,
   isHost,
+  hostDisplayName,
   onLobby,
   onQuitMultiplayer,
   onPlayInRoom,
@@ -41,7 +42,9 @@ export function Library({
       if (isHost) {
         onPlayInRoom(gameId);
       } else {
-        setHostNote('Only the host can switch games. Hang tight!');
+        setHostNote(
+          `${hostDisplayName ?? 'The host'} picks the games. You're along for the ride!`,
+        );
       }
       return;
     }
@@ -74,19 +77,20 @@ export function Library({
       {activeRoom ? (
         <p className="muted" style={{ fontWeight: 800, marginBottom: 10 }}>
           {isHost
-            ? 'Tap a game to start it for everyone right away.'
-            : 'Host picks the next game — you\'ll jump in automatically.'}
+            ? 'Tap a game to set it for the party (everyone must be ready to start).'
+            : `${hostDisplayName ?? 'Host'} is selecting games — your grid is view-only.`}
         </p>
       ) : null}
 
-      <div className="game-grid">
+      <div className={`game-grid ${activeRoom && !isHost ? 'game-grid-locked' : ''}`}>
         {GAMES.map((g) => (
           <button
             key={g.id}
             type="button"
-            className="game-card"
+            className={`game-card ${activeRoom && !isHost ? 'game-card-locked' : ''}`}
             style={{ borderColor: 'var(--ink)', boxShadow: `0 4px 0 var(--ink)` }}
             onClick={() => pickGame(g.id)}
+            aria-disabled={!!(activeRoom && !isHost)}
           >
             <span className="emoji" aria-hidden>
               {g.emoji}
@@ -101,7 +105,7 @@ export function Library({
         <Panel className="join-panel">
           <p className="h3">Multiplayer</p>
           <p className="muted" style={{ margin: '4px 0 12px' }}>
-            Host a room or join with a friend&apos;s code.
+            Host a room or join with the same join code your friends see.
           </p>
           <div className="stack">
             <Button variant="sky" block onClick={() => onCreateRoom('number-rush')}>
@@ -110,7 +114,7 @@ export function Library({
             <div className="join-row">
               <input
                 className="field"
-                placeholder="CODE"
+                placeholder="JOIN CODE"
                 maxLength={6}
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}

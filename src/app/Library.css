@@ -84,7 +84,7 @@
   inset: 0;
   z-index: 40;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   padding: 16px;
   background: rgba(20, 40, 80, 0.45);
@@ -93,11 +93,36 @@
 
 .pick-sheet {
   width: min(420px, 100%);
-  margin-bottom: 12px;
+  max-height: min(80vh, 520px);
+  overflow: auto;
   animation: pop-in 0.3s var(--bounce) both;
 }
 
 .welcome-nick {
   animation: pop-in 0.35s var(--bounce) both;
+}
+
+.join-code-hero {
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  margin: 4px 0 8px;
+  text-align: center;
+  color: var(--red);
+}
+
+.game-card-locked {
+  opacity: 0.55;
+  filter: grayscale(0.15);
+}
+
+.game-card-locked:active {
+  transform: none;
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.game-grid-locked .game-card {
+  cursor: not-allowed;
 }
 

@@ -13,7 +13,7 @@ import { roomCode as makeCode, randomSeed } from '../lib/random';
 import type { PlayerInfo, ScoreValue } from '../games/types';
 import { ensureAnonAuth, getFirebase, isFirebaseConfigured } from './firebase';
 
-export type RoomStatus = 'lobby' | 'playing' | 'results';
+export type RoomStatus = 'lobby' | 'countdown' | 'playing' | 'results';
 
 /** Per-player: in the live match vs back in the party lobby / browsing games. */
 export type PlayerPresence = 'lobby' | 'playing';
@@ -23,6 +23,7 @@ export type RoomPlayer = PlayerInfo & {
   joinedAt: number;
   /** Defaults to lobby for older rooms missing the field. */
   presence?: PlayerPresence;
+  ready?: boolean;
 };
 
 export type RoomData = {
@@ -38,6 +39,8 @@ export type RoomData = {
   /** shared state for turn-based games */
   gameState: unknown | null;
   winnerId?: string | null;
+  /** Shared 3-2-1 start clock (ms epoch). */
+  countdownEndsAt?: number | null;
 };
 
 const LOCAL_ROOMS_KEY = 'playplace.localRooms';
@@ -68,12 +71,19 @@ export async function createRoom(gameId: string, host: PlayerInfo): Promise<Room
     seed: randomSeed(),
     createdAt: Date.now(),
     players: {
-      [host.id]: { ...host, connected: true, joinedAt: Date.now(), presence: 'lobby' },
+      [host.id]: {
+        ...host,
+        connected: true,
+        joinedAt: Date.now(),
+        presence: 'lobby',
+        ready: false,
+      },
     },
     scores: {},
     finished: {},
     gameState: null,
     winnerId: null,
+    countdownEndsAt: null,
   };
 
   if (!isFirebaseConfigured()) {
@@ -107,6 +117,7 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
       connected: true,
       joinedAt: Date.now(),
       presence: 'lobby',
+      ready: false,
     };
     writeLocal(store);
     return room;
@@ -127,6 +138,7 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
     connected: true,
     joinedAt: Date.now(),
     presence: 'lobby',
+    ready: false,
   });
   await onDisconnect(playerRef).update({ connected: false });
   return { ...room, code: normalized };
@@ -174,6 +186,37 @@ export function getPresence(player: RoomPlayer): PlayerPresence {
   return player.presence === 'playing' ? 'playing' : 'lobby';
 }
 
+export function playersList(room: RoomData): RoomPlayer[] {
+  return Object.values(room.players || {}).sort((a, b) => a.joinedAt - b.joinedAt);
+}
+
+export function connectedPlayers(room: RoomData): RoomPlayer[] {
+  return playersList(room).filter((p) => p.connected);
+}
+
+export function allConnectedReady(room: RoomData): boolean {
+  const connected = connectedPlayers(room);
+  return connected.length > 0 && connected.every((p) => !!p.ready);
+}
+
+export function hostName(room: RoomData): string {
+  return room.players?.[room.hostId]?.name ?? 'Host';
+}
+
+export async function setPlayerReady(code: string, playerId: string, ready: boolean) {
+  const normalized = code.trim().toUpperCase();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room?.players[playerId]) return;
+    room.players[playerId].ready = ready;
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await set(ref(db, `rooms/${normalized}/players/${playerId}/ready`), ready);
+}
+
 export async function setPlayerPresence(
   code: string,
   playerId: string,
@@ -203,8 +246,10 @@ export async function setRoomGame(code: string, gameId: string) {
     room.scores = {};
     room.finished = {};
     room.gameState = null;
+    room.countdownEndsAt = null;
     for (const p of Object.values(room.players)) {
       p.presence = 'lobby';
+      p.ready = false;
     }
     writeLocal(store);
     return;
@@ -219,94 +264,109 @@ export async function setRoomGame(code: string, gameId: string) {
     scores: {},
     finished: {},
     gameState: null,
+    countdownEndsAt: null,
   };
   for (const id of Object.keys(players)) {
     updates[`players/${id}/presence`] = 'lobby';
+    updates[`players/${id}/ready`] = false;
+  }
+  await update(ref(db, `rooms/${normalized}`), updates);
+}
+
+/** Shared 3-2-1 then match — all devices use countdownEndsAt. */
+async function beginCountdown(
+  code: string,
+  opts: { gameId?: string; seed?: number } = {},
+) {
+  const normalized = code.trim().toUpperCase();
+  const nextSeed = opts.seed ?? randomSeed();
+  const countdownEndsAt = Date.now() + 3000;
+
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    if (opts.gameId) room.gameId = opts.gameId;
+    room.status = 'countdown';
+    room.seed = nextSeed;
+    room.countdownEndsAt = countdownEndsAt;
+    room.scores = {};
+    room.finished = {};
+    room.gameState = null;
+    room.winnerId = null;
+    for (const p of Object.values(room.players)) {
+      p.presence = 'playing';
+      p.ready = false;
+    }
+    writeLocal(store);
+    return;
+  }
+
+  const { db } = getFirebase();
+  const snap = await get(ref(db, `rooms/${normalized}/players`));
+  const players = (snap.exists() ? snap.val() : {}) as Record<string, RoomPlayer>;
+  const updates: Record<string, unknown> = {
+    status: 'countdown',
+    seed: nextSeed,
+    countdownEndsAt,
+    scores: {},
+    finished: {},
+    gameState: null,
+    winnerId: null,
+  };
+  if (opts.gameId) updates.gameId = opts.gameId;
+  for (const id of Object.keys(players)) {
+    updates[`players/${id}/presence`] = 'playing';
+    updates[`players/${id}/ready`] = false;
   }
   await update(ref(db, `rooms/${normalized}`), updates);
 }
 
 export async function startMatch(code: string, seed?: number) {
-  const normalized = code.trim().toUpperCase();
-  const nextSeed = seed ?? randomSeed();
-
-  if (!isFirebaseConfigured()) {
-    const store = readLocal();
-    const room = store[normalized];
-    if (!room) return;
-    room.status = 'playing';
-    room.seed = nextSeed;
-    room.scores = {};
-    room.finished = {};
-    room.gameState = null;
-    room.winnerId = null;
-    for (const p of Object.values(room.players)) {
-      p.presence = 'playing';
-    }
-    writeLocal(store);
-    return;
-  }
-
-  const { db } = getFirebase();
-  const snap = await get(ref(db, `rooms/${normalized}/players`));
-  const players = (snap.exists() ? snap.val() : {}) as Record<string, RoomPlayer>;
-  const updates: Record<string, unknown> = {
-    status: 'playing',
-    seed: nextSeed,
-    scores: {},
-    finished: {},
-    gameState: null,
-    winnerId: null,
-  };
-  for (const id of Object.keys(players)) {
-    updates[`players/${id}/presence`] = 'playing';
-  }
-  await update(ref(db, `rooms/${normalized}`), updates);
+  await beginCountdown(code, { seed });
 }
 
-/** Host picks a game and everyone jumps into it immediately. */
+/** Host picks a game and everyone jumps into the countdown together. */
 export async function startPartyGame(code: string, gameId: string, seed?: number) {
-  const normalized = code.trim().toUpperCase();
-  const nextSeed = seed ?? randomSeed();
-
-  if (!isFirebaseConfigured()) {
-    const store = readLocal();
-    const room = store[normalized];
-    if (!room) return;
-    room.gameId = gameId;
-    room.status = 'playing';
-    room.seed = nextSeed;
-    room.scores = {};
-    room.finished = {};
-    room.gameState = null;
-    room.winnerId = null;
-    for (const p of Object.values(room.players)) {
-      p.presence = 'playing';
-    }
-    writeLocal(store);
-    return;
-  }
-
-  const { db } = getFirebase();
-  const snap = await get(ref(db, `rooms/${normalized}/players`));
-  const players = (snap.exists() ? snap.val() : {}) as Record<string, RoomPlayer>;
-  const updates: Record<string, unknown> = {
-    gameId,
-    status: 'playing',
-    seed: nextSeed,
-    scores: {},
-    finished: {},
-    gameState: null,
-    winnerId: null,
-  };
-  for (const id of Object.keys(players)) {
-    updates[`players/${id}/presence`] = 'playing';
-  }
-  await update(ref(db, `rooms/${normalized}`), updates);
+  await beginCountdown(code, { gameId, seed });
 }
 
 export async function rematch(code: string) {
-  await startMatch(code, randomSeed());
+  await beginCountdown(code, { seed: randomSeed() });
+}
+
+/** Promote next connected player if the host fully leaves multiplayer. */
+export async function leaveRoom(code: string, playerId: string) {
+  const normalized = code.trim().toUpperCase();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    const wasHost = room.hostId === playerId;
+    delete room.players[playerId];
+    const remaining = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
+    if (remaining.length === 0) {
+      delete store[normalized];
+    } else if (wasHost) {
+      room.hostId = remaining[0].id;
+    }
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  const roomSnap = await get(ref(db, `rooms/${normalized}`));
+  if (!roomSnap.exists()) return;
+  const room = roomSnap.val() as RoomData;
+  const wasHost = room.hostId === playerId;
+  await remove(ref(db, `rooms/${normalized}/players/${playerId}`));
+  const remaining = Object.values(room.players || {})
+    .filter((p) => p.id !== playerId)
+    .sort((a, b) => a.joinedAt - b.joinedAt);
+  if (remaining.length === 0) {
+    await remove(ref(db, `rooms/${normalized}`));
+  } else if (wasHost) {
+    await update(ref(db, `rooms/${normalized}`), { hostId: remaining[0].id });
+  }
 }
 
 /** Leave the current mini-game but stay in the party. */
@@ -419,23 +479,4 @@ export async function setSharedGameState(code: string, gameState: unknown) {
 
 export async function finishTurnGame(code: string, winnerId?: string) {
   await patchRoom(code, { status: 'results', winnerId: winnerId ?? null });
-}
-
-export async function leaveRoom(code: string, playerId: string) {
-  const normalized = code.trim().toUpperCase();
-  if (!isFirebaseConfigured()) {
-    const store = readLocal();
-    const room = store[normalized];
-    if (!room) return;
-    delete room.players[playerId];
-    if (Object.keys(room.players).length === 0) delete store[normalized];
-    writeLocal(store);
-    return;
-  }
-  const { db } = getFirebase();
-  await remove(ref(db, `rooms/${normalized}/players/${playerId}`));
-}
-
-export function playersList(room: RoomData): RoomPlayer[] {
-  return Object.values(room.players || {}).sort((a, b) => a.joinedAt - b.joinedAt);
 }
