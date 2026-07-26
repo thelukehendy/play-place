@@ -340,37 +340,71 @@ function useAnagram(
 ) {
   const [state, setState] = useState(initial);
   const [guess, setGuess] = useState('');
+  const [reveal, setReveal] = useState<string | null>(null);
+  const [missed, setMissed] = useState<string[]>([]);
   const done = useRef(false);
+  const revealTimer = useRef<number | null>(null);
+
   useEffect(() => {
     setState(initial);
     setGuess('');
+    setReveal(null);
+    setMissed([]);
     done.current = false;
+    if (revealTimer.current) clearTimeout(revealTimer.current);
   }, [initial]);
+
+  useEffect(
+    () => () => {
+      if (revealTimer.current) clearTimeout(revealTimer.current);
+    },
+    [],
+  );
+
   const elapsed = useElapsed(state.startedAt, state.finishedAt);
 
-  const submit = () => {
-    if (done.current || state.finishedAt) return;
-    const answer = guess.trim().toUpperCase();
-    if (!answer) return;
-    setState((s) => {
-      const startedAt = s.startedAt ?? Date.now();
-      const ok = answer === s.words[s.index];
-      const correct = s.correct + (ok ? 1 : 0);
-      const index = s.index + 1;
-      const finished = index >= ROUNDS;
-      const finishedAt = finished ? Date.now() : null;
-      if (finished && !done.current) {
-        done.current = true;
-        queueMicrotask(() => onFinish(correct, (finishedAt ?? Date.now()) - startedAt));
-      } else if (onProgress) {
-        queueMicrotask(() => onProgress(correct, index));
-      }
-      return { ...s, index, correct, startedAt, finishedAt };
-    });
-    setGuess('');
+  const advance = (s: AnagramState, correct: number, index: number, startedAt: number) => {
+    const finished = index >= ROUNDS;
+    const finishedAt = finished ? Date.now() : null;
+    if (finished && !done.current) {
+      done.current = true;
+      queueMicrotask(() => onFinish(correct, (finishedAt ?? Date.now()) - startedAt));
+    } else if (onProgress) {
+      queueMicrotask(() => onProgress(correct, index));
+    }
+    return { ...s, index, correct, startedAt, finishedAt };
   };
 
-  return { state, elapsed, guess, setGuess, submit };
+  const submit = () => {
+    if (done.current || state.finishedAt || reveal) return;
+    const answer = guess.trim().toUpperCase();
+    if (!answer) return;
+    const target = state.words[state.index];
+    const ok = answer === target;
+    setGuess('');
+
+    if (ok) {
+      setState((s) => {
+        const startedAt = s.startedAt ?? Date.now();
+        return advance(s, s.correct + 1, s.index + 1, startedAt);
+      });
+      return;
+    }
+
+    // Wrong — reveal the spelling, then move on.
+    setReveal(target);
+    setMissed((m) => [...m, target]);
+    if (revealTimer.current) clearTimeout(revealTimer.current);
+    revealTimer.current = window.setTimeout(() => {
+      setReveal(null);
+      setState((s) => {
+        const startedAt = s.startedAt ?? Date.now();
+        return advance(s, s.correct, s.index + 1, startedAt);
+      });
+    }, 1400);
+  };
+
+  return { state, elapsed, guess, setGuess, submit, reveal, missed };
 }
 
 function Board({
@@ -379,6 +413,8 @@ function Board({
   guess,
   setGuess,
   onSubmit,
+  reveal,
+  missed,
   footer,
 }: {
   state: AnagramState;
@@ -386,6 +422,8 @@ function Board({
   guess: string;
   setGuess: (v: string) => void;
   onSubmit: () => void;
+  reveal: string | null;
+  missed: string[];
   footer?: React.ReactNode;
 }) {
   const done = state.finishedAt !== null;
@@ -399,36 +437,53 @@ function Board({
         <Stat>Correct: {state.correct}</Stat>
         <Stat>{formatTime(elapsed)}</Stat>
       </GameHud>
-      <Rules text="Unscramble each word. Same list for everyone!" />
+      <Rules text="Unscramble each word. Misses reveal the answer." />
       <div className="panel ana-card">
         {!done ? (
           <>
-            <p className="ana-round muted">Unscramble</p>
-            <p className="ana-scrambled">{word}</p>
-            <form
-              className="stack"
-              onSubmit={(e) => {
-                e.preventDefault();
-                onSubmit();
-              }}
-            >
-              <input
-                className="field ana-input"
-                value={guess}
-                onChange={(e) => setGuess(e.target.value)}
-                autoCapitalize="characters"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="YOUR GUESS"
-                autoFocus
-              />
-              <Button type="submit" variant="gold" block>
-                Submit
-              </Button>
-            </form>
+            <p className="ana-round muted">{reveal ? 'Answer' : 'Unscramble'}</p>
+            <p className="ana-scrambled">{reveal ? reveal : word}</p>
+            {reveal ? (
+              <p className="muted" style={{ fontWeight: 800, textAlign: 'center' }}>
+                It was {reveal}
+              </p>
+            ) : (
+              <form
+                className="stack"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onSubmit();
+                }}
+              >
+                <input
+                  className="field ana-input"
+                  value={guess}
+                  onChange={(e) => setGuess(e.target.value)}
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="YOUR GUESS"
+                  autoFocus
+                />
+                <Button type="submit" variant="gold" block>
+                  Submit
+                </Button>
+              </form>
+            )}
           </>
         ) : (
-          <p className="h3">Done! {state.correct}/{ROUNDS} correct</p>
+          <>
+            <p className="h3">Done! {state.correct}/{ROUNDS} correct</p>
+            {missed.length ? (
+              <p className="muted" style={{ marginTop: 10, fontWeight: 800 }}>
+                Missed: {missed.join(', ')}
+              </p>
+            ) : (
+              <p className="muted" style={{ marginTop: 10, fontWeight: 800 }}>
+                Perfect round!
+              </p>
+            )}
+          </>
         )}
       </div>
       {footer}
@@ -437,13 +492,15 @@ function Board({
 }
 
 function SoloView({ initialState, onFinish }: SoloGameProps<AnagramState>) {
-  const { state, elapsed, guess, setGuess, submit } = useAnagram(initialState, (correct, ms) =>
-    onFinish({
-      score: {
-        primary: correct * 100000 - ms,
-        label: `${correct}/${ROUNDS} · ${formatTime(ms)}`,
-      },
-    }),
+  const { state, elapsed, guess, setGuess, submit, reveal, missed } = useAnagram(
+    initialState,
+    (correct, ms) =>
+      onFinish({
+        score: {
+          primary: correct * 100000 - ms,
+          label: `${correct}/${ROUNDS} · ${formatTime(ms)}`,
+        },
+      }),
   );
   return (
     <Board
@@ -452,12 +509,14 @@ function SoloView({ initialState, onFinish }: SoloGameProps<AnagramState>) {
       guess={guess}
       setGuess={setGuess}
       onSubmit={submit}
+      reveal={reveal}
+      missed={missed}
     />
   );
 }
 
 function RaceView(props: RaceGameProps<AnagramState>) {
-  const { state, elapsed, guess, setGuess, submit } = useAnagram(
+  const { state, elapsed, guess, setGuess, submit, reveal, missed } = useAnagram(
     props.initialState,
     (correct, ms) => {
       const score = {
@@ -483,6 +542,8 @@ function RaceView(props: RaceGameProps<AnagramState>) {
       guess={guess}
       setGuess={setGuess}
       onSubmit={submit}
+      reveal={reveal}
+      missed={missed}
     />
   );
 }

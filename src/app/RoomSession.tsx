@@ -5,18 +5,22 @@ import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import { isFirebaseConfigured } from '../multiplayer/firebase';
 import {
   allConnectedReady,
+  clearNudge,
   finishTurnGame,
   getPresence,
   hostName,
   markFinished,
+  nudgePlayer,
   playersList,
   rematch,
+  removePlayer,
   setPlayerReady,
   setSharedGameState,
   startMatch,
   subscribeRoom,
   updateScore,
   type RoomData,
+  type RoomPlayer,
 } from '../multiplayer/rooms';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
@@ -25,6 +29,8 @@ import { GAMES } from '../games/registry';
 import { copyText, roomInviteUrl, shareRoomInvite } from '../lib/invite';
 import { recordMultiplayerMatch } from '../lib/stats';
 import { sfxCountdown, sfxFinish, sfxGo, sfxReady } from '../lib/sfx';
+
+const NUDGE_REMOVE_MS = 6000;
 
 type Props = {
   code: string;
@@ -164,23 +170,11 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
 
           <div style={{ height: 14 }} />
           <p className="h3">Players</p>
-          <ul style={{ paddingLeft: 18, fontWeight: 700 }}>
-            {players.map((p) => {
-              const presence = getPresence(p);
-              let status = '';
-              if (!p.connected) status = ' · away';
-              else if (room.status === 'playing' && presence === 'playing') status = ' · playing';
-              else status = p.ready ? ' · ready ✓' : ' · not ready';
-              return (
-                <li key={p.id}>
-                  {p.name}
-                  {p.id === room.hostId ? ' 👑 host' : ''}
-                  {p.id === player.id ? ' (you)' : ''}
-                  {status}
-                </li>
-              );
-            })}
-          </ul>
+          <ReadyPlayerList
+            room={room}
+            youId={player.id}
+            onError={setError}
+          />
 
           <div style={{ height: 12 }} />
           <Button
@@ -191,7 +185,7 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
               setPlayerReady(room.code, player.id, !amReady).catch((err) => setError(String(err)));
             }}
           >
-            {amReady ? 'Ready ✓' : 'Ready up'}
+            {amReady ? 'Ready!' : 'Ready?'}
           </Button>
 
           <div style={{ height: 14 }} />
@@ -310,6 +304,87 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
   );
 }
 
+function ReadyPlayerList({
+  room,
+  youId,
+  onError,
+}: {
+  room: RoomData;
+  youId: string;
+  onError?: (msg: string) => void;
+}) {
+  const players = playersList(room);
+  const you = useMemo(
+    () => ({ id: youId, name: ensureNickname() }),
+    [youId],
+  );
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <ul style={{ paddingLeft: 0, listStyle: 'none', fontWeight: 700, margin: 0 }}>
+      {players.map((p: RoomPlayer) => {
+        const presence = getPresence(p);
+        let status = '';
+        if (!p.connected) status = 'away';
+        else if (room.status === 'playing' && presence === 'playing') status = 'playing';
+        else status = p.ready ? 'Ready!' : 'not ready';
+        const nudge = room.nudges?.[p.id];
+        const nudgedAgo = nudge ? now - nudge.at : 0;
+        const canRemove =
+          !p.ready &&
+          p.connected &&
+          p.id !== youId &&
+          !!nudge &&
+          (nudge.fromId === youId || room.hostId === youId) &&
+          nudgedAgo >= NUDGE_REMOVE_MS;
+
+        return (
+          <li key={p.id} style={{ marginBottom: 8 }}>
+            <button
+              type="button"
+              className="ready-name-btn"
+              disabled={p.id === youId || !!p.ready || !p.connected}
+              onClick={() => {
+                if (p.id === youId || p.ready) return;
+                nudgePlayer(room.code, p.id, you).catch((err) => onError?.(String(err)));
+              }}
+            >
+              {p.name}
+              {p.id === room.hostId ? ' 👑' : ''}
+              {p.id === youId ? ' (you)' : ''}
+              <span className="muted"> — {status}</span>
+            </button>
+            {!p.ready && p.id !== youId && p.connected ? (
+              <p className="muted" style={{ fontSize: '0.8rem', margin: '2px 0 0 4px' }}>
+                Tap name to nudge “Ready to go?”
+              </p>
+            ) : null}
+            {canRemove ? (
+              <Button
+                variant="ghost"
+                block
+                style={{ marginTop: 4 }}
+                onClick={() => {
+                  removePlayer(room.code, p.id)
+                    .then(() => clearNudge(room.code, p.id))
+                    .catch((err) => onError?.(String(err)));
+                }}
+              >
+                Remove {p.name}
+              </Button>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function CountdownScreen({
   room,
   gameTitle,
@@ -424,15 +499,8 @@ function ResultsRoom({
 
         <div style={{ height: 12 }} />
         <p className="h3">Ready for next?</p>
-        <ul style={{ paddingLeft: 18, fontWeight: 700, marginBottom: 10 }}>
-          {players.map((p) => (
-            <li key={p.id}>
-              {p.name}
-              {p.id === room.hostId ? ' 👑' : ''}
-              {p.ready ? ' ✓ ready' : ' …'}
-            </li>
-          ))}
-        </ul>
+        <ReadyPlayerList room={room} youId={playerId} />
+        <div style={{ height: 10 }} />
         <Button
           variant={amReady ? 'green' : 'sky'}
           block
@@ -441,7 +509,7 @@ function ResultsRoom({
             setPlayerReady(room.code, playerId, !amReady).catch(() => undefined);
           }}
         >
-          {amReady ? 'Ready ✓' : 'Ready up'}
+          {amReady ? 'Ready!' : 'Ready?'}
         </Button>
 
         <div style={{ height: 14 }} />

@@ -2,6 +2,7 @@ import {
   get,
   onDisconnect,
   onValue,
+  push,
   ref,
   remove,
   set,
@@ -41,6 +42,21 @@ export type RoomData = {
   winnerId?: string | null;
   /** Shared 3-2-1 start clock (ms epoch). */
   countdownEndsAt?: number | null;
+  chat?: Record<string, ChatMessage>;
+  nudges?: Record<string, Nudge>;
+};
+
+export type ChatMessage = {
+  fromId: string;
+  fromName: string;
+  text: string;
+  at: number;
+};
+
+export type Nudge = {
+  fromId: string;
+  fromName: string;
+  at: number;
 };
 
 const LOCAL_ROOMS_KEY = 'playplace.localRooms';
@@ -210,11 +226,15 @@ export async function setPlayerReady(code: string, playerId: string, ready: bool
     const room = store[normalized];
     if (!room?.players[playerId]) return;
     room.players[playerId].ready = ready;
+    if (ready && room.nudges?.[playerId]) delete room.nudges[playerId];
     writeLocal(store);
     return;
   }
   const { db } = getFirebase();
   await set(ref(db, `rooms/${normalized}/players/${playerId}/ready`), ready);
+  if (ready) {
+    await remove(ref(db, `rooms/${normalized}/nudges/${playerId}`));
+  }
 }
 
 export async function setPlayerPresence(
@@ -479,4 +499,82 @@ export async function setSharedGameState(code: string, gameState: unknown) {
 
 export async function finishTurnGame(code: string, winnerId?: string) {
   await patchRoom(code, { status: 'results', winnerId: winnerId ?? null });
+}
+
+export async function sendChatMessage(
+  code: string,
+  from: PlayerInfo,
+  text: string,
+) {
+  const normalized = code.trim().toUpperCase();
+  const cleaned = text.trim().slice(0, 200);
+  if (!cleaned) return;
+  const msg: ChatMessage = {
+    fromId: from.id,
+    fromName: from.name,
+    text: cleaned,
+    at: Date.now(),
+  };
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    const id = `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    room.chat = { ...(room.chat || {}), [id]: msg };
+    // keep last ~40 messages
+    const ids = Object.keys(room.chat).sort(
+      (a, b) => (room.chat![a].at || 0) - (room.chat![b].at || 0),
+    );
+    if (ids.length > 40) {
+      for (const old of ids.slice(0, ids.length - 40)) delete room.chat[old];
+    }
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await push(ref(db, `rooms/${normalized}/chat`), msg);
+}
+
+export async function nudgePlayer(
+  code: string,
+  targetId: string,
+  from: PlayerInfo,
+) {
+  const normalized = code.trim().toUpperCase();
+  const nudge: Nudge = { fromId: from.id, fromName: from.name, at: Date.now() };
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    room.nudges = { ...(room.nudges || {}), [targetId]: nudge };
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await set(ref(db, `rooms/${normalized}/nudges/${targetId}`), nudge);
+}
+
+export async function clearNudge(code: string, targetId: string) {
+  const normalized = code.trim().toUpperCase();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room?.nudges) return;
+    delete room.nudges[targetId];
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await remove(ref(db, `rooms/${normalized}/nudges/${targetId}`));
+}
+
+/** Remove a stuck player from the party (host transfer applies if needed). */
+export async function removePlayer(code: string, targetId: string) {
+  await leaveRoom(code, targetId);
+}
+
+export function chatList(room: RoomData): (ChatMessage & { id: string })[] {
+  return Object.entries(room.chat || {})
+    .map(([id, m]) => ({ id, ...m }))
+    .sort((a, b) => a.at - b.at);
 }

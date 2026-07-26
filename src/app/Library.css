@@ -126,3 +126,25 @@
   cursor: not-allowed;
 }
 
+.ready-name-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  font: inherit;
+  font-weight: 800;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ready-name-btn:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.ready-name-btn:not(:disabled):active {
+  opacity: 0.7;
+}
+

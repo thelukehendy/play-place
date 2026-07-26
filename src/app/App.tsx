@@ -21,6 +21,7 @@ import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import type { GameFinishPayload } from '../games/types';
 import { Panel } from '../ui/Panel';
 import { Button } from '../ui/Button';
+import { PartyChatChrome } from './PartyChat';
 
 const ACTIVE_ROOM_KEY = 'playplace.activeRoom';
 
@@ -230,6 +231,8 @@ export function App() {
 
   return (
     <div className="app-shell">
+      {roomCode && screen.name !== 'welcome' ? <PartyChatChrome code={roomCode} /> : null}
+
       {error ? (
         <Panel>
           <p style={{ fontWeight: 800, marginBottom: 10 }}>{error}</p>

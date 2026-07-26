@@ -3,7 +3,7 @@ import { createRng, formatTime, shuffle } from '../../lib/random';
 import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
 import { GameHud, Rules, Stat } from '../../ui/GameChrome';
 import { Button } from '../../ui/Button';
-import { WORD_DICT } from './dictionary';
+import { isScrabbleWord, loadWordDict } from './dictionary';
 import './WordClaim.css';
 
 const LETTERS =
@@ -56,6 +56,7 @@ function useWordClaim(
   const [flash, setFlash] = useState<Flash>(null);
   const done = useRef(false);
   const [now, setNow] = useState(Date.now());
+  const [dictReady, setDictReady] = useState(false);
   const flashTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -64,6 +65,20 @@ function useWordClaim(
     setFlash(null);
     done.current = false;
   }, [initial]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadWordDict()
+      .then(() => {
+        if (!cancelled) setDictReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setDictReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 100);
@@ -112,15 +127,19 @@ function useWordClaim(
   const clearPick = () => setPicked([]);
 
   const submit = () => {
-    if (state.finishedAt || word.length < 3) return;
+    if (state.finishedAt || word.length < 2) return;
+    if (!dictReady) {
+      showFlash('bad', 'Loading dictionary…');
+      return;
+    }
     ensureStarted();
     if (state.found.includes(word)) {
       showFlash('bad', `Already claimed: ${word}`);
       setPicked([]);
       return;
     }
-    if (!WORD_DICT.has(word)) {
-      showFlash('bad', `Not a word: ${word}`);
+    if (!isScrabbleWord(word)) {
+      showFlash('bad', `Not a Scrabble word: ${word}`);
       setPicked([]);
       return;
     }
@@ -135,7 +154,7 @@ function useWordClaim(
     setPicked([]);
   };
 
-  return { state, remaining, word, picked, flash, toggle, clearPick, submit };
+  return { state, remaining, word, picked, flash, toggle, clearPick, submit, dictReady };
 }
 
 function Board({
@@ -166,7 +185,7 @@ function Board({
         <Stat>Words: {state.found.length}</Stat>
         <Stat>{formatTime(remaining)}</Stat>
       </GameHud>
-      <Rules text="Make real words from the letters. 60 seconds!" />
+      <Rules text="Scrabble-legal words only (2+ letters). 60 seconds!" />
       <div className={`wc-flash ${flash ? flash.kind : ''}`} role="status" aria-live="polite">
         {flash ? flash.text : '\u00A0'}
       </div>
@@ -190,7 +209,7 @@ function Board({
         <Button variant="ghost" onClick={onClear} disabled={!!state.finishedAt}>
           Clear
         </Button>
-        <Button variant="gold" onClick={onSubmit} disabled={!!state.finishedAt || word.length < 3}>
+        <Button variant="gold" onClick={onSubmit} disabled={!!state.finishedAt || word.length < 2}>
           Claim
         </Button>
       </div>
@@ -252,7 +271,7 @@ export const wordClaimGame: GameDefinition<WordClaimState> = {
   emoji: '📝',
   accent: 'var(--gold)',
   modes: ['solo', 'race'],
-  rules: 'Build real words in 60s. Longer words score more!',
+  rules: 'Build Scrabble-legal words in 60s. Longer words score more!',
   createInitialState: (seed) => createWordClaimState(seed),
   SoloView,
   RaceView,
