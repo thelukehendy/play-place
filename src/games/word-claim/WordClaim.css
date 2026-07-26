@@ -29,16 +29,23 @@
   border-radius: 10px;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(1rem, 4.5vw, 1.25rem);
-  background: var(--gold);
+  /* Fill most of the tile so letters read clearly at a glance. */
+  font-size: clamp(1.55rem, 9vw, 2.2rem);
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--ink);
+  background: #ffe45c;
   box-shadow: 0 2px 0 var(--ink);
   min-height: 0;
   padding: 0;
+  display: grid;
+  place-items: center;
+  -webkit-text-stroke: 0;
 }
 
 .wc-letter.on {
-  background: var(--sky);
-  color: var(--cloud);
+  background: var(--sky-deep);
+  color: #ffffff;
 }
 
 .wc-letter.used {
