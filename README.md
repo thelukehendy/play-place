@@ -7,7 +7,7 @@ Bright toybox / playground vibes (Mario-inspired colors — no Nintendo characte
 ## Games
 
 1. **Number Rush** — tap 1→25
-2. **Slide Race** — 15-puzzle race
+2. **Slide Race** — 3×3 slide puzzle race
 3. **Memory Match** — pair cards
 4. **Color Flood** — flood-fill the board
 5. **Lights Out** — turn all lights off

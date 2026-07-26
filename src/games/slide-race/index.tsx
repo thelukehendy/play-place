@@ -4,7 +4,7 @@ import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
 import { GameHud, Rules, Stat } from '../../ui/GameChrome';
 import './SlideRace.css';
 
-const N = 4;
+const N = 3;
 const TOTAL = N * N;
 
 export type SlideState = {
@@ -48,7 +48,7 @@ export function createSlideState(seed: number): SlideState {
   const rng = createRng(seed);
   let tiles = Array.from({ length: TOTAL }, (_, i) => (i + 1) % TOTAL);
   let lastEmpty = tiles.indexOf(0);
-  for (let i = 0; i < 180; i++) {
+  for (let i = 0; i < 40; i++) {
     const empty = tiles.indexOf(0);
     let neighbors = neighborsOf(empty).filter((n) => n !== lastEmpty);
     if (neighbors.length === 0) neighbors = neighborsOf(empty);
@@ -161,7 +161,7 @@ function Board({
         <Stat>Moves: {state.moves}</Stat>
         <Stat>{formatTime(elapsed)}</Stat>
       </GameHud>
-      <Rules text="Tap a tile beside the gap — it slides into place. Order 1–15!" />
+      <Rules text="Tap a tile beside the gap — it slides into place. Order 1–8!" />
       <div className="slide-board" style={{ ['--n' as string]: N }}>
         <div
           className="slide-empty"
@@ -235,7 +235,7 @@ function RaceView(props: RaceGameProps<SlideState>) {
 export const slideRaceGame: GameDefinition<SlideState> = {
   id: 'slide-race',
   title: 'Slide Race',
-  blurb: 'Race the classic 15-puzzle.',
+  blurb: 'Race a quick 3×3 slide puzzle.',
   emoji: '🧩',
   accent: 'var(--sky)',
   modes: ['solo', 'race'],
