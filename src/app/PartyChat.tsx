@@ -88,7 +88,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
   const [draft, setDraft] = useState('');
   const [toasts, setToasts] = useState<(ChatMessage & { id: string })[]>([]);
   /** Fixed sheet height in px, captured when opening (before keyboard). */
-  const [sheetPx, setSheetPx] = useState(320);
+  const [sheetPx, setSheetPx] = useState(280);
   const seen = useRef<Set<string>>(new Set());
   const bootstrapped = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -119,8 +119,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
 
   const messages = room && code ? chatList(room) : [];
 
-  // Seed "seen" from the first real room snapshot only — never toast history
-  // (including the race where chat is empty on the first empty tick).
+  // Seed "seen" from the first real room snapshot only — never toast history.
   useEffect(() => {
     if (!code || !room) return;
     if (!bootstrapped.current) {
@@ -140,19 +139,23 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     });
   }, [messages, player.id, code, room]);
 
-  // Lock page scroll + freeze sheet height while chat is open so the keyboard
-  // cannot shove the lobby (or the sheet) around.
+  // Freeze page + sheet geometry while chat is open. Counter iOS visualViewport
+  // pan on #root so the sheet and the game behind stay vertically still.
   useEffect(() => {
     if (!open) return;
 
-    const h = Math.min(Math.round(window.innerHeight * 0.48), 420);
-    setSheetPx(Math.max(260, h));
+    // Keep the whole sheet in the upper portion so the keyboard never covers the input.
+    const h = Math.min(Math.round(window.innerHeight * 0.42), 360);
+    setSheetPx(Math.max(240, h));
 
     scrollLockY.current = window.scrollY || window.pageYOffset || 0;
     const body = document.body;
     const html = document.documentElement;
+    const root = document.getElementById('root');
     const prevBody = body.style.cssText;
-    const prevHtmlOverflow = html.style.overflow;
+    const prevHtml = html.style.cssText;
+    const prevRoot = root?.style.cssText ?? '';
+
     body.style.cssText = [
       'position:fixed',
       'width:100%',
@@ -160,40 +163,47 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
       'left:0',
       'right:0',
       'overflow:hidden',
+      'touch-action:none',
     ].join(';');
-    html.style.overflow = 'hidden';
+    html.style.cssText = 'overflow:hidden;height:100%;';
+    if (root) {
+      root.style.overflow = 'hidden';
+      root.style.height = '100%';
+      root.style.touchAction = 'none';
+    }
 
-    const keepScrollPinned = () => {
-      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    const pinViewport = () => {
+      window.scrollTo(0, 0);
       const vv = window.visualViewport;
-      // If the visual viewport pans (iOS keyboard), nudge overlay stays put via CSS.
-      if (vv && (vv.offsetTop !== 0 || vv.pageTop !== 0)) {
-        window.scrollTo(0, 0);
+      if (!root) return;
+      if (!vv) {
+        root.style.transform = '';
+        return;
       }
+      // Cancel iOS visual-viewport pan so fixed UI + game stay put on screen.
+      const y = vv.offsetTop || 0;
+      const x = vv.offsetLeft || 0;
+      root.style.transform = y || x ? `translate(${x}px, ${y}px)` : '';
     };
-    window.addEventListener('scroll', keepScrollPinned, { passive: true });
+
+    pinViewport();
+    window.addEventListener('scroll', pinViewport, { passive: true });
     const vv = window.visualViewport;
-    vv?.addEventListener('scroll', keepScrollPinned, { passive: true });
-    vv?.addEventListener('resize', keepScrollPinned, { passive: true });
+    vv?.addEventListener('scroll', pinViewport, { passive: true });
+    vv?.addEventListener('resize', pinViewport, { passive: true });
 
     return () => {
-      window.removeEventListener('scroll', keepScrollPinned);
-      vv?.removeEventListener('scroll', keepScrollPinned);
-      vv?.removeEventListener('resize', keepScrollPinned);
+      window.removeEventListener('scroll', pinViewport);
+      vv?.removeEventListener('scroll', pinViewport);
+      vv?.removeEventListener('resize', pinViewport);
       body.style.cssText = prevBody;
-      html.style.overflow = prevHtmlOverflow;
+      html.style.cssText = prevHtml;
+      if (root) root.style.cssText = prevRoot;
       window.scrollTo(0, scrollLockY.current);
     };
   }, [open]);
 
-  // Focus once when opening — preventScroll so iOS doesn't pan the page.
-  useEffect(() => {
-    if (!open) return;
-    const t = window.setTimeout(() => {
-      inputRef.current?.focus({ preventScroll: true });
-    }, 40);
-    return () => clearTimeout(t);
-  }, [open]);
+  // Do not auto-focus on open — focusing the field is what triggers the iOS pan.
 
   // Keep list scrolled to latest without touching focus/layout.
   useEffect(() => {
@@ -238,7 +248,6 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     if (!text) return;
     setDraft('');
     sfxTap();
-    // Keep keyboard open — do not blur on send.
     inputRef.current?.focus({ preventScroll: true });
     try {
       await sendChatMessage(code, player, text);
@@ -251,6 +260,29 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
   const closeChat = () => {
     setOpen(false);
     setDraft('');
+  };
+
+  const pinRootNow = () => {
+    window.scrollTo(0, 0);
+    const root = document.getElementById('root');
+    const vv = window.visualViewport;
+    if (!root) return;
+    if (!vv) {
+      root.style.transform = '';
+      return;
+    }
+    const y = vv.offsetTop || 0;
+    const x = vv.offsetLeft || 0;
+    root.style.transform = y || x ? `translate(${x}px, ${y}px)` : '';
+  };
+
+  const onFieldFocus = () => {
+    // Re-pin immediately on focus — iOS pans asynchronously after this.
+    pinRootNow();
+    window.requestAnimationFrame(pinRootNow);
+    window.setTimeout(pinRootNow, 50);
+    window.setTimeout(pinRootNow, 150);
+    window.setTimeout(pinRootNow, 300);
   };
 
   return (
@@ -273,7 +305,6 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
           role="dialog"
           aria-modal="true"
           onMouseDown={(e) => {
-            // Backdrop click closes; ignore presses inside the sheet.
             if (e.target === e.currentTarget) closeChat();
           }}
         >
@@ -290,6 +321,46 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
                 Close
               </Button>
             </div>
+            {/* Composer at the TOP so iOS never needs to pan the viewport to
+                keep the caret above the keyboard. */}
+            <form
+              className="chat-compose"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void send();
+              }}
+            >
+              <input
+                ref={inputRef}
+                className="field"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onPointerDown={(e) => {
+                  // Take focus ourselves with preventScroll so Safari does not
+                  // vertically pan the page to the caret.
+                  e.preventDefault();
+                  inputRef.current?.focus({ preventScroll: true });
+                  onFieldFocus();
+                }}
+                onFocus={onFieldFocus}
+                placeholder="Message the party…"
+                maxLength={200}
+                enterKeyHint="send"
+                autoComplete="off"
+                autoCorrect="off"
+                inputMode="text"
+              />
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!draft.trim()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                }}
+              >
+                Send
+              </Button>
+            </form>
             <div className="chat-list" ref={listRef}>
               {messages.length === 0 ? (
                 <p className="muted" style={{ fontWeight: 700 }}>
@@ -307,40 +378,6 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
                 ))
               )}
             </div>
-            <form
-              className="chat-compose"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void send();
-              }}
-            >
-              <input
-                ref={inputRef}
-                className="field"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onFocus={() => {
-                  // iOS sometimes scrolls the page on focus — pin immediately.
-                  window.scrollTo(0, 0);
-                }}
-                placeholder="Message the party…"
-                maxLength={200}
-                enterKeyHint="send"
-                autoComplete="off"
-                autoCorrect="off"
-              />
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={!draft.trim()}
-                onMouseDown={(e) => {
-                  // Keep the keyboard up — don't steal focus from the input.
-                  e.preventDefault();
-                }}
-              >
-                Send
-              </Button>
-            </form>
           </div>
         </div>
       ) : null}
