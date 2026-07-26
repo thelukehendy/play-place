@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createRng, formatTime } from '../../lib/random';
+import { createRng } from '../../lib/random';
 import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
 import { GameHud, Rules, Stat } from '../../ui/GameChrome';
 import './ColorFlood.css';
@@ -50,20 +50,9 @@ function isWon(grid: number[]) {
   return grid.every((x) => x === grid[0]);
 }
 
-function useElapsed(startedAt: number | null, finishedAt: number | null) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (!startedAt || finishedAt) return;
-    const id = setInterval(() => setNow(Date.now()), 100);
-    return () => clearInterval(id);
-  }, [startedAt, finishedAt]);
-  if (!startedAt) return 0;
-  return (finishedAt ?? now) - startedAt;
-}
-
 function useFlood(
   initial: FloodState,
-  onFinish: (moves: number, ms: number) => void,
+  onFinish: (moves: number) => void,
   onProgress?: (filled: number, moves: number) => void,
 ) {
   const [state, setState] = useState(initial);
@@ -72,7 +61,6 @@ function useFlood(
     setState(initial);
     done.current = false;
   }, [initial]);
-  const elapsed = useElapsed(state.startedAt, state.finishedAt);
 
   const pick = (color: number) => {
     if (done.current || state.finishedAt || color === state.grid[0]) return;
@@ -84,7 +72,7 @@ function useFlood(
       const finishedAt = won ? Date.now() : null;
       if (won && !done.current) {
         done.current = true;
-        queueMicrotask(() => onFinish(moves, (finishedAt ?? Date.now()) - startedAt));
+        queueMicrotask(() => onFinish(moves));
       } else if (onProgress) {
         queueMicrotask(() => onProgress(filledCount(grid), moves));
       }
@@ -92,28 +80,27 @@ function useFlood(
     });
   };
 
-  return { state, elapsed, pick };
+  return { state, pick };
 }
 
 function Board({
   state,
-  elapsed,
   onPick,
   footer,
 }: {
   state: FloodState;
-  elapsed: number;
   onPick: (c: number) => void;
   footer?: React.ReactNode;
 }) {
   return (
     <div>
       <GameHud>
-        <Stat>Moves: {state.moves}</Stat>
-        <Stat>Filled: {filledCount(state.grid)}/{SIZE * SIZE}</Stat>
-        <Stat>{formatTime(elapsed)}</Stat>
+        <Stat>Taps: {state.moves}</Stat>
+        <Stat>
+          Filled: {filledCount(state.grid)}/{SIZE * SIZE}
+        </Stat>
       </GameHud>
-      <Rules text="Flood from the top-left until one color remains." />
+      <Rules text="Flood from the top-left. Fewest taps wins — speed does not matter." />
       <div className="flood-grid" style={{ gridTemplateColumns: `repeat(${SIZE}, 1fr)` }}>
         {state.grid.map((c, i) => (
           <div key={i} className="flood-cell" style={{ background: COLORS[c] }} />
@@ -138,22 +125,22 @@ function Board({
 }
 
 function SoloView({ initialState, onFinish }: SoloGameProps<FloodState>) {
-  const { state, elapsed, pick } = useFlood(initialState, (moves, ms) =>
+  const { state, pick } = useFlood(initialState, (moves) =>
     onFinish({
-      score: { primary: moves, label: `${moves} moves · ${formatTime(ms)}`, lowerIsBetter: true },
+      score: { primary: moves, label: `${moves} taps`, lowerIsBetter: true },
     }),
   );
-  return <Board state={state} elapsed={elapsed} onPick={pick} />;
+  return <Board state={state} onPick={pick} />;
 }
 
 function RaceView(props: RaceGameProps<FloodState>) {
   const total = SIZE * SIZE;
-  const { state, elapsed, pick } = useFlood(
+  const { state, pick } = useFlood(
     props.initialState,
-    (moves, ms) => {
+    (moves) => {
       const score = {
         primary: moves,
-        label: `${moves}m · ${formatTime(ms)}`,
+        label: `${moves} taps`,
         lowerIsBetter: true as const,
         progress: 1,
       };
@@ -162,24 +149,25 @@ function RaceView(props: RaceGameProps<FloodState>) {
     },
     (filled, moves) => {
       props.onLocalScore({
+        // Live standings: cells left. Final score (on finish) is taps only.
         primary: total - filled,
-        label: `${filled}/${total} · ${moves}m`,
+        label: `${filled}/${total} · ${moves} taps`,
         lowerIsBetter: true,
         progress: filled / total,
       });
     },
   );
-  return <Board state={state} elapsed={elapsed} onPick={pick} />;
+  return <Board state={state} onPick={pick} />;
 }
 
 export const colorFloodGame: GameDefinition<FloodState> = {
   id: 'color-flood',
   title: 'Color Flood',
-  blurb: 'Flood the board in few moves.',
+  blurb: 'Flood the board in fewest taps.',
   emoji: '🎨',
   accent: 'var(--green)',
   modes: ['solo', 'race'],
-  rules: 'Tap colors to flood from the corner.',
+  rules: 'Tap colors to flood from the corner. Fewest taps wins.',
   createInitialState: (seed) => createFloodState(seed),
   SoloView,
   RaceView,

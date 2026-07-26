@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { createRng, formatTime } from '../../lib/random';
+import { createRng } from '../../lib/random';
 import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
 import { GameHud, Rules, Stat } from '../../ui/GameChrome';
 import './SignalTap.css';
 
 const ROUNDS = 5;
+/** Extra delay added to the total for each early tap. */
+const FALSE_START_PENALTY_MS = 1000;
 
 export type SignalState = {
   seed: number;
   round: number;
-  score: number; // lower ms total is better — we store points = speed score
+  /** Sum of reaction times (+ false-start penalties). Lower is better. */
+  totalMs: number;
   falseStarts: number;
   phase: 'wait' | 'go' | 'result' | 'done';
   waitUntil: number;
@@ -23,7 +26,7 @@ export function createSignalState(seed: number): SignalState {
   return {
     seed,
     round: 0,
-    score: 0,
+    totalMs: 0,
     falseStarts: 0,
     phase: 'wait',
     waitUntil: 0,
@@ -36,8 +39,8 @@ export function createSignalState(seed: number): SignalState {
 
 function useSignal(
   initial: SignalState,
-  onFinish: (score: number, avgMs: number) => void,
-  onProgress?: (score: number, round: number) => void,
+  onFinish: (totalMs: number) => void,
+  onProgress?: (totalMs: number, round: number) => void,
 ) {
   const [state, setState] = useState(initial);
   const done = useRef(false);
@@ -81,30 +84,34 @@ function useSignal(
     if (done.current || state.finishedAt) return;
     setState((s) => {
       if (s.phase === 'wait') {
-        return { ...s, falseStarts: s.falseStarts + 1, score: Math.max(0, s.score - 5) };
+        const totalMs = s.totalMs + FALSE_START_PENALTY_MS;
+        onProgress?.(totalMs, s.round);
+        return {
+          ...s,
+          falseStarts: s.falseStarts + 1,
+          totalMs,
+        };
       }
       if (s.phase !== 'go' || !s.goAt) return s;
       const ms = Date.now() - s.goAt;
-      const gained = Math.max(1, 40 - Math.floor(ms / 25));
       const roundMs = [...s.roundMs, ms];
-      const score = s.score + gained;
+      const totalMs = s.totalMs + ms;
       const round = s.round + 1;
-      onProgress?.(score, round);
+      onProgress?.(totalMs, round);
       if (round >= ROUNDS) {
         done.current = true;
-        const avg = Math.round(roundMs.reduce((a, b) => a + b, 0) / roundMs.length);
         const finished = {
           ...s,
-          score,
+          totalMs,
           round,
           roundMs,
           phase: 'done' as const,
           finishedAt: Date.now(),
         };
-        queueMicrotask(() => onFinish(score, avg));
+        queueMicrotask(() => onFinish(totalMs));
         return finished;
       }
-      return armRound({ ...s, score, round, roundMs, phase: 'wait' }, s.startedAt ?? Date.now());
+      return armRound({ ...s, totalMs, round, roundMs, phase: 'wait' }, s.startedAt ?? Date.now());
     });
   };
 
@@ -118,28 +125,21 @@ function View({
   footer,
 }: {
   initialState: SignalState;
-  onFinish: (score: number, avgMs: number) => void;
-  onProgress?: (score: number, round: number) => void;
+  onFinish: (totalMs: number) => void;
+  onProgress?: (totalMs: number, round: number) => void;
   footer?: ReactNode;
 }) {
   const { state, tap } = useSignal(initialState, onFinish, onProgress);
-  const elapsed =
-    state.startedAt && !state.finishedAt
-      ? Date.now() - state.startedAt
-      : state.startedAt && state.finishedAt
-        ? state.finishedAt - state.startedAt
-        : 0;
 
   return (
     <div>
       <GameHud>
-        <Stat>Score {state.score}</Stat>
+        <Stat>Delay {state.totalMs}ms</Stat>
         <Stat>
           Round {Math.min(state.round + 1, ROUNDS)}/{ROUNDS}
         </Stat>
-        <Stat>{formatTime(elapsed)}</Stat>
       </GameHud>
-      <Rules text="Wait for GREEN, then tap fast. Early taps cost points." />
+      <Rules text="Wait for GREEN, then tap fast. Lowest total delay wins. Early taps add 1000ms." />
       <button
         type="button"
         className={`signal-pad signal-${state.phase}`}
@@ -166,8 +166,14 @@ function SoloView({ initialState, onFinish }: SoloGameProps<SignalState>) {
   return (
     <View
       initialState={initialState}
-      onFinish={(score, avg) =>
-        onFinish({ score: { primary: score, label: `${score} pts · avg ${avg}ms` } })
+      onFinish={(totalMs) =>
+        onFinish({
+          score: {
+            primary: totalMs,
+            label: `${totalMs}ms`,
+            lowerIsBetter: true,
+          },
+        })
       }
     />
   );
@@ -181,16 +187,24 @@ function RaceView({
   return (
     <View
       initialState={initialState}
-      onProgress={(score, round) =>
+      onProgress={(totalMs, round) =>
         onLocalScore({
-          primary: score,
-          label: `R${round}/${ROUNDS}`,
+          // Inflate unfinished rounds so live standings prefer more completed rounds,
+          // then lower delay. Final score (on finish) is total ms only.
+          primary: totalMs + (ROUNDS - round) * 10_000,
+          label: `${totalMs}ms · R${round}/${ROUNDS}`,
+          lowerIsBetter: true,
           progress: round / ROUNDS,
         })
       }
-      onFinish={(score, avg) =>
+      onFinish={(totalMs) =>
         onFinish({
-          score: { primary: score, label: `${score} pts · avg ${avg}ms`, progress: 1 },
+          score: {
+            primary: totalMs,
+            label: `${totalMs}ms`,
+            lowerIsBetter: true,
+            progress: 1,
+          },
         })
       }
     />
@@ -200,11 +214,11 @@ function RaceView({
 export const signalTapGame: GameDefinition<SignalState> = {
   id: 'signal-tap',
   title: 'Signal Tap',
-  blurb: 'Green means go — fastest taps win.',
+  blurb: 'Green means go — lowest total delay wins.',
   emoji: '🚦',
   accent: 'var(--green)',
   modes: ['solo', 'race'],
-  rules: 'Wait for green, then tap. False starts lose points. Best total wins.',
+  rules: 'Wait for green, then tap. Lowest total delay wins.',
   createInitialState: (seed) => createSignalState(seed),
   SoloView,
   RaceView,
