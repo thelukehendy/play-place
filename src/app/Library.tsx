@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { GAMES } from '../games/registry';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
@@ -144,41 +145,51 @@ export function Library({
         Stats
       </Button>
 
-      {picked && !activeRoom ? (
-        <div className="pick-modal" role="dialog" aria-modal="true">
-          <Panel className="pick-sheet">
-            <p className="h3">{GAMES.find((g) => g.id === picked)?.title}</p>
-            <p className="muted" style={{ marginTop: 4, marginBottom: 12 }}>
-              {GAMES.find((g) => g.id === picked)?.blurb}
-            </p>
-            <div className="stack">
-              <Button
-                variant="gold"
-                block
-                onClick={() => {
-                  onSolo(picked);
-                  setPicked(null);
-                }}
-              >
-                Play Solo
-              </Button>
-              <Button
-                variant="sky"
-                block
-                onClick={() => {
-                  onCreateRoom(picked);
-                  setPicked(null);
-                }}
-              >
-                Host multiplayer
-              </Button>
-              <Button variant="ghost" block onClick={() => setPicked(null)}>
-                Cancel
-              </Button>
-            </div>
-          </Panel>
-        </div>
-      ) : null}
+      {picked && !activeRoom
+        ? createPortal(
+            <div
+              className="pick-modal"
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setPicked(null);
+              }}
+            >
+              <Panel className="pick-sheet">
+                <p className="h3">{GAMES.find((g) => g.id === picked)?.title}</p>
+                <p className="muted" style={{ marginTop: 4, marginBottom: 12 }}>
+                  {GAMES.find((g) => g.id === picked)?.blurb}
+                </p>
+                <div className="stack">
+                  <Button
+                    variant="gold"
+                    block
+                    onClick={() => {
+                      onSolo(picked);
+                      setPicked(null);
+                    }}
+                  >
+                    Play Solo
+                  </Button>
+                  <Button
+                    variant="sky"
+                    block
+                    onClick={() => {
+                      onCreateRoom(picked);
+                      setPicked(null);
+                    }}
+                  >
+                    Host multiplayer
+                  </Button>
+                  <Button variant="ghost" block onClick={() => setPicked(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </Panel>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
