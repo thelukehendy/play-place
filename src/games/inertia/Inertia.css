@@ -1,0 +1,183 @@
+.inertia-board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inertia-board .game-hud {
+  margin-bottom: 0;
+  gap: 6px;
+}
+
+.inertia-board .game-hud .stat {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  border-width: 2px;
+}
+
+.inertia-board .game-rules {
+  margin: 0 0 4px;
+  font-size: 0.82rem;
+}
+
+.inertia-flash {
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.9rem;
+  min-height: 1.2rem;
+  margin: 0;
+  color: var(--ink);
+}
+
+.inertia-flash.idle {
+  opacity: 0;
+}
+
+.inertia-grid {
+  display: grid;
+  gap: 3px;
+  width: min(100%, 360px);
+  margin: 0 auto;
+  padding: 6px;
+  background: #d8dee6;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.inertia-grid.dead {
+  animation: wiggle 0.35s ease;
+}
+
+.inertia-grid.clear {
+  box-shadow: 0 0 0 3px var(--green), 0 4px 0 var(--ink);
+}
+
+.inertia-cell {
+  aspect-ratio: 1;
+  border: none;
+  padding: 0;
+  margin: 0;
+  border-radius: 6px;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  position: relative;
+  min-height: 0;
+  cursor: pointer;
+}
+
+.inertia-cell:disabled {
+  cursor: default;
+}
+
+.inertia-cell.wall {
+  background: linear-gradient(145deg, #f2f2f2, #b8b8b8);
+  border: 2px solid #8a8a8a;
+  box-shadow: inset 1px 1px 0 #fff, inset -2px -2px 0 #9a9a9a;
+  cursor: default;
+}
+
+.inertia-pad {
+  width: 72%;
+  height: 72%;
+  border: 2px dashed rgba(26, 26, 46, 0.28);
+  border-radius: 999px;
+  box-sizing: border-box;
+}
+
+.inertia-ball {
+  width: 78%;
+  height: 78%;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #b6f5a8, var(--green) 55%, var(--green-dark));
+  border: 2px solid var(--ink);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  z-index: 2;
+}
+
+.inertia-cell.doomed .inertia-ball {
+  background: radial-gradient(circle at 35% 30%, #ffb4b4, var(--red) 55%, var(--red-dark));
+}
+
+.inertia-gem {
+  width: 58%;
+  height: 58%;
+  background: #7de8ff;
+  border: 2px solid var(--sky-deep);
+  transform: rotate(45deg);
+  border-radius: 4px;
+  box-shadow: 0 2px 0 rgba(2, 119, 168, 0.35);
+}
+
+.inertia-mine {
+  width: 70%;
+  height: 70%;
+  border-radius: 999px;
+  background: var(--ink);
+  position: relative;
+  box-shadow: 0 0 0 2px #111;
+}
+
+.inertia-mine::before,
+.inertia-mine::after {
+  content: '';
+  position: absolute;
+  inset: 18%;
+  background: var(--ink);
+  border-radius: 2px;
+}
+
+.inertia-mine::before {
+  transform: rotate(0deg);
+}
+
+.inertia-mine::after {
+  transform: rotate(45deg);
+}
+
+.inertia-mine::after {
+  /* cross spikes */
+}
+
+.inertia-mine {
+  background:
+    radial-gradient(circle at center, #fff 0 18%, transparent 19%),
+    var(--ink);
+}
+
+.inertia-mine.mover {
+  outline: 2px solid var(--red);
+  outline-offset: 1px;
+  animation: bob 1.2s ease-in-out infinite;
+}
+
+.inertia-stop {
+  width: 70%;
+  height: 70%;
+  border-radius: 999px;
+  border: 3px solid var(--ink);
+  background: radial-gradient(circle at 40% 35%, #fff6a8, var(--gold));
+  box-sizing: border-box;
+}
+
+.inertia-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.inertia-actions .btn {
+  flex: 1;
+  min-height: 42px;
+  font-size: 0.9rem;
+  padding: 0 10px;
+}
+
+.inertia-hint {
+  margin: 2px 0 0;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.82rem;
+  opacity: 0.8;
+}

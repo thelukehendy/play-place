@@ -8,6 +8,7 @@ import { anagramSprintGame } from './anagram-sprint';
 import { wordClaimGame } from './word-claim';
 import { dotsBoxesGame } from './dots-boxes';
 import { whackGridGame } from './whack-grid';
+import { inertiaGame } from './inertia';
 import type { GameDefinition } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,6 +23,7 @@ export const GAMES: GameDefinition<any>[] = [
   wordClaimGame,
   dotsBoxesGame,
   whackGridGame,
+  inertiaGame,
 ];
 
 export function getGame(id: string) {
