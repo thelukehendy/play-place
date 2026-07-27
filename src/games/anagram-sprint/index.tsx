@@ -346,29 +346,23 @@ function useElapsed(startedAt: number | null, finishedAt: number | null) {
   return (finishedAt ?? now) - startedAt;
 }
 
-/** Has every race opponent completed at least `completed` words? */
-function peersCompletedWords(sync: RaceSync, completed: number): boolean {
-  const need = completed / ROUNDS;
+/** True when every other player has finished the full word set. */
+function peersFinishedRound(sync: RaceSync): boolean {
   return sync.players.every((p) => {
     if (p.id === sync.playerId) return true;
     if (sync.finishedPlayers.includes(p.id)) return true;
-    const prog = sync.remoteScores[p.id]?.progress ?? 0;
-    return prog + 1e-9 >= need;
+    return (sync.remoteScores[p.id]?.progress ?? 0) + 1e-9 >= 1;
   });
 }
 
-function waitingSummary(sync: RaceSync, completed: number) {
-  const need = completed / ROUNDS;
-  const doneNames: string[] = [];
-  const waitingNames: string[] = [];
-  for (const p of sync.players) {
-    const local = p.id === sync.playerId;
-    const prog = local ? need : (sync.remoteScores[p.id]?.progress ?? 0);
-    const done = local || sync.finishedPlayers.includes(p.id) || prog + 1e-9 >= need;
-    if (done) doneNames.push(local ? 'You' : p.name);
-    else waitingNames.push(p.name);
-  }
-  return { doneNames, waitingNames };
+function stillPlayingNames(sync: RaceSync): string[] {
+  return sync.players
+    .filter((p) => {
+      if (p.id === sync.playerId) return false;
+      if (sync.finishedPlayers.includes(p.id)) return false;
+      return (sync.remoteScores[p.id]?.progress ?? 0) + 1e-9 < 1;
+    })
+    .map((p) => p.name);
 }
 
 function useAnagram(
@@ -381,8 +375,6 @@ function useAnagram(
   const [guess, setGuess] = useState('');
   const [reveal, setReveal] = useState<string | null>(null);
   const [missed, setMissed] = useState<string[]>([]);
-  /** Words completed locally; when set, gate the next word until peers catch up. */
-  const [awaitingPeersAt, setAwaitingPeersAt] = useState<number | null>(null);
   const done = useRef(false);
   const revealTimer = useRef<number | null>(null);
 
@@ -391,7 +383,6 @@ function useAnagram(
     setGuess('');
     setReveal(null);
     setMissed([]);
-    setAwaitingPeersAt(null);
     done.current = false;
     if (revealTimer.current) clearTimeout(revealTimer.current);
   }, [initial]);
@@ -405,14 +396,6 @@ function useAnagram(
 
   const elapsed = useElapsed(state.startedAt, state.finishedAt);
 
-  // Race: release the next word only when everyone has finished this one.
-  useEffect(() => {
-    if (!sync || awaitingPeersAt === null) return;
-    if (awaitingPeersAt >= ROUNDS) return; // match over locally — stay on done screen
-    if (!peersCompletedWords(sync, awaitingPeersAt)) return;
-    setAwaitingPeersAt(null);
-  }, [sync, awaitingPeersAt]);
-
   const advance = (s: AnagramState, correct: number, index: number, startedAt: number) => {
     const finished = index >= ROUNDS;
     const finishedAt = finished ? Date.now() : null;
@@ -422,16 +405,11 @@ function useAnagram(
     } else if (onProgress) {
       queueMicrotask(() => onProgress(correct, index));
     }
-    if (sync) {
-      // Gate the next scrambled word until every player finishes this round.
-      queueMicrotask(() => setAwaitingPeersAt(index));
-    }
     return { ...s, index, correct, startedAt, finishedAt };
   };
 
   const submit = () => {
     if (done.current || state.finishedAt || reveal) return;
-    if (awaitingPeersAt !== null && awaitingPeersAt < ROUNDS) return;
     const answer = guess.trim().toUpperCase();
     if (!answer) return;
     const target = state.words[state.index];
@@ -459,15 +437,8 @@ function useAnagram(
     }, 1400);
   };
 
-  // While gated mid-match, suppress the next word until peers catch up.
-  const gated =
-    !!sync &&
-    awaitingPeersAt !== null &&
-    awaitingPeersAt < ROUNDS &&
-    !peersCompletedWords(sync, awaitingPeersAt);
-
-  const waitingMatchEnd =
-    !!sync && !!state.finishedAt && !peersCompletedWords(sync, ROUNDS);
+  // Only wait after the full set of words — not between each word.
+  const waitingMatchEnd = !!sync && !!state.finishedAt && !peersFinishedRound(sync);
 
   return {
     state,
@@ -477,9 +448,7 @@ function useAnagram(
     submit,
     reveal,
     missed,
-    gated,
     waitingMatchEnd,
-    awaitingPeersAt,
     sync,
   };
 }
@@ -492,9 +461,7 @@ function Board({
   onSubmit,
   reveal,
   missed,
-  gated,
   waitingMatchEnd,
-  awaitingPeersAt,
   sync,
   footer,
 }: {
@@ -505,46 +472,36 @@ function Board({
   onSubmit: () => void;
   reveal: string | null;
   missed: string[];
-  gated?: boolean;
   waitingMatchEnd?: boolean;
-  awaitingPeersAt?: number | null;
   sync?: RaceSync;
   footer?: React.ReactNode;
 }) {
   const done = state.finishedAt !== null;
   const word = state.scrambled[Math.min(state.index, ROUNDS - 1)];
-  const showWait = !!(gated || waitingMatchEnd);
-  const waitMeta =
-    sync && awaitingPeersAt != null
-      ? waitingSummary(sync, awaitingPeersAt)
-      : sync && waitingMatchEnd
-        ? waitingSummary(sync, ROUNDS)
-        : null;
+  const waitingNames = sync && waitingMatchEnd ? stillPlayingNames(sync) : [];
 
   return (
     <div className="ana-board">
       <GameHud>
         <Stat>
-          {gated && awaitingPeersAt != null
-            ? `${awaitingPeersAt}/${ROUNDS}`
-            : `${Math.min(state.index + 1, ROUNDS)}/${ROUNDS}`}
+          {Math.min(state.index + 1, ROUNDS)}/{ROUNDS}
         </Stat>
         <Stat>✓ {state.correct}</Stat>
         <Stat>{formatTime(elapsed)}</Stat>
       </GameHud>
       <div className="ana-play">
-        {showWait ? (
+        {waitingMatchEnd ? (
           <div className="ana-wait">
             <p className="h3" style={{ margin: 0 }}>
-              {waitingMatchEnd ? 'You finished!' : 'Word done!'}
+              You finished!
             </p>
             <p className="ana-reveal-note">
-              {waitingMatchEnd
-                ? 'Waiting for everyone to finish the round…'
-                : 'Waiting for everyone before the next word…'}
+              Done! {state.correct}/{ROUNDS}
+              {missed.length ? ` · Missed: ${missed.join(', ')}` : ' · Perfect!'}
             </p>
-            {waitMeta?.waitingNames.length ? (
-              <p className="ana-wait-peers">Still going: {waitMeta.waitingNames.join(', ')}</p>
+            <p className="ana-reveal-note">Waiting for everyone to finish the round…</p>
+            {waitingNames.length ? (
+              <p className="ana-wait-peers">Still going: {waitingNames.join(', ')}</p>
             ) : (
               <p className="ana-wait-peers">Almost…</p>
             )}
@@ -628,18 +585,7 @@ function RaceView(props: RaceGameProps<AnagramState>) {
     finishedPlayers: props.finishedPlayers,
   };
 
-  const {
-    state,
-    elapsed,
-    guess,
-    setGuess,
-    submit,
-    reveal,
-    missed,
-    gated,
-    waitingMatchEnd,
-    awaitingPeersAt,
-  } = useAnagram(
+  const { state, elapsed, guess, setGuess, submit, reveal, missed, waitingMatchEnd } = useAnagram(
     props.initialState,
     (correct, ms) => {
       const score = {
@@ -669,9 +615,7 @@ function RaceView(props: RaceGameProps<AnagramState>) {
       onSubmit={submit}
       reveal={reveal}
       missed={missed}
-      gated={gated}
       waitingMatchEnd={waitingMatchEnd}
-      awaitingPeersAt={awaitingPeersAt}
       sync={sync}
     />
   );
@@ -684,7 +628,7 @@ export const anagramSprintGame: GameDefinition<AnagramState> = {
   emoji: '🔤',
   accent: 'var(--red)',
   modes: ['solo', 'race'],
-  rules: 'Unscramble each word. In a party, everyone finishes a word before the next one.',
+  rules: 'Unscramble all words. In a party, results wait until everyone finishes the round.',
   createInitialState: (seed) => createAnagramState(seed),
   SoloView,
   RaceView,
