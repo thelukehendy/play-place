@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRng, formatTime, shuffle } from '../../lib/random';
+import { haptic } from '../../lib/sfx';
 import type {
   GameDefinition,
   PlayerInfo,
@@ -11,287 +12,173 @@ import { GameHud, Stat } from '../../ui/GameChrome';
 import { Button } from '../../ui/Button';
 import './AnagramSprint.css';
 
+/** Pool of words with exactly one Scrabble anagram (avoids alternate valid answers). */
 const WORDS = [
-  'ACTOR',
   'AIRPORT',
   'ANDROID',
-  'APPLE',
   'ARMOR',
-  'ARTIST',
   'ATHLETE',
-  'ATTIC',
   'AUTUMN',
   'AVENUE',
-  'AXLE',
-  'BACON',
-  'BAGEL',
   'BAKERY',
   'BANANA',
   'BASEMENT',
   'BATTERY',
   'BEACH',
   'BERRY',
-  'BLAST',
   'BLOCK',
   'BRANCH',
   'BRAVE',
-  'BREAD',
   'BREEZY',
   'BRICK',
-  'BRIDGE',
   'BROTHER',
-  'BUILDER',
   'BUTTER',
   'BUTTON',
-  'CAMEL',
   'CAMERA',
   'CAMPING',
   'CANDY',
   'CANYON',
-  'CASTLE',
   'CHEER',
   'CHEESE',
   'CHEETAH',
-  'CHEST',
   'CHIMNEY',
   'CHORUS',
-  'CIPHER',
   'CIRCUIT',
   'CLAP',
   'CLEVER',
-  'CLOSET',
-  'CLOUD',
   'CLOUDY',
   'CLUB',
   'COACH',
-  'CODE',
   'COFFEE',
-  'COMET',
   'COOKIE',
-  'CORAL',
   'CORNER',
   'COUSIN',
-  'CREAM',
   'CROWD',
   'CROWN',
   'CRYSTAL',
   'CURTAIN',
   'CYBORG',
-  'DANCE',
-  'DESERT',
   'DIAMOND',
   'DOCTOR',
   'DOLPHIN',
   'DONUT',
-  'DOOR',
   'DRAGON',
   'DRIVER',
-  'DRONE',
   'DRUM',
-  'EAGLE',
   'EMERALD',
-  'EMPIRE',
-  'ENERGY',
   'ENGINE',
   'EVENING',
   'FABLE',
   'FAMILY',
-  'FARMER',
   'FESTIVAL',
   'FISHING',
   'FLASH',
-  'FLOWER',
   'FLUTE',
   'FOGGY',
   'FORCE',
-  'FOREST',
-  'FRIEND',
-  'FRIES',
   'FROSTY',
   'FUNNY',
   'GALAXY',
-  'GAME',
   'GARAGE',
-  'GARDEN',
   'GATHER',
-  'GEAR',
-  'GOLDEN',
   'GORILLA',
-  'GRAPE',
   'GROUP',
   'GUITAR',
   'HAPPY',
   'HARBOR',
   'HAWK',
-  'HERO',
   'HIKING',
-  'HOLIDAY',
   'HONEY',
-  'HORSE',
   'HOUSE',
   'ISLAND',
   'JOYFUL',
   'JUICE',
   'JUMP',
-  'KIND',
   'KINGDOM',
-  'KITCHEN',
   'KITTEN',
   'KNIGHT',
   'KOALA',
-  'LAKE',
-  'LASER',
   'LAUGH',
-  'LEAF',
   'LEGEND',
-  'LEMON',
   'LEVEL',
-  'LEVER',
   'LIBRARY',
-  'LION',
   'LLAMA',
   'LOCK',
   'LOUD',
   'LUCKY',
-  'MAGIC',
   'MAGNET',
-  'MANGO',
   'MARKET',
   'MEADOW',
   'MELODY',
-  'MELON',
-  'METEOR',
   'MIDNIGHT',
   'MONKEY',
   'MORNING',
   'MOTION',
   'MOTOR',
-  'MOUSE',
   'MOVIE',
   'MUFFIN',
   'MUSEUM',
   'MUSIC',
   'MYTH',
-  'NEBULA',
   'NEIGHBOR',
   'NOVEL',
-  'OCEAN',
-  'OLIVE',
-  'ORANGE',
   'ORBIT',
   'PANDA',
   'PANTHER',
   'PARADE',
-  'PARENT',
   'PARTY',
-  'PASTA',
-  'PEACH',
   'PEBBLE',
-  'PETAL',
   'PIANO',
   'PICNIC',
   'PILOT',
   'PIPE',
   'PIZZA',
-  'PLANET',
-  'PLAY',
-  'PLAYER',
-  'POEM',
   'PONY',
   'POWER',
   'PULLEY',
   'PUPPY',
-  'PURPLE',
   'PUZZLE',
   'QUEST',
-  'QUIET',
   'RABBIT',
-  'RACE',
   'RAINBOW',
   'RAINY',
   'RHYTHM',
-  'RIDDLE',
   'RIVER',
   'ROBIN',
   'ROBOT',
   'ROCKET',
   'ROOF',
-  'ROOT',
   'ROUND',
-  'SAILING',
   'SAILOR',
   'SALAD',
-  'SAND',
   'SAPPHIRE',
-  'SCHOOL',
-  'SCORE',
-  'SECRET',
-  'SHAKE',
-  'SHARK',
-  'SHELL',
-  'SHIELD',
-  'SILVER',
-  'SINGER',
-  'SISTER',
-  'SKATING',
   'SKIING',
-  'SMART',
-  'SMILE',
   'SNOWY',
-  'SODA',
-  'SOLDIER',
   'SPARROW',
-  'SPEED',
-  'SPICE',
   'SPRING',
   'STADIUM',
-  'STAGE',
-  'STAR',
   'STATION',
-  'STEAK',
-  'STONE',
   'STORMY',
-  'STORY',
-  'STREET',
-  'SUGAR',
   'SUMMER',
   'SUNNY',
-  'SUNRISE',
-  'SUNSET',
-  'SUPER',
   'SURFING',
   'SUSHI',
   'SWIFT',
   'SWITCH',
-  'SWORD',
-  'TACOS',
-  'TEACHER',
-  'TEAM',
-  'THEATER',
   'THUNDER',
   'TICKET',
-  'TIDE',
   'TIGER',
-  'TOAST',
-  'TOWER',
-  'TREASURE',
-  'TREE',
   'TRUMPET',
   'TUNNEL',
   'VALLEY',
   'VILLAIN',
   'VIOLIN',
-  'WATER',
   'WAVE',
   'WEEKEND',
-  'WHALE',
   'WHEEL',
   'WINDOW',
   'WINNER',
-  'WINTER',
   'WRITER',
-  'YOGURT',
-  'ZEBRA',
 ];
 
 const ROUNDS = 6;
@@ -373,23 +260,27 @@ function useAnagram(
 ) {
   const [state, setState] = useState(initial);
   const [guess, setGuess] = useState('');
+  /** Missed-word reveal (red). */
   const [reveal, setReveal] = useState<string | null>(null);
+  /** Correct-word flash (green). */
+  const [success, setSuccess] = useState<string | null>(null);
   const [missed, setMissed] = useState<string[]>([]);
   const done = useRef(false);
-  const revealTimer = useRef<number | null>(null);
+  const stepTimer = useRef<number | null>(null);
 
   useEffect(() => {
     setState(initial);
     setGuess('');
     setReveal(null);
+    setSuccess(null);
     setMissed([]);
     done.current = false;
-    if (revealTimer.current) clearTimeout(revealTimer.current);
+    if (stepTimer.current) clearTimeout(stepTimer.current);
   }, [initial]);
 
   useEffect(
     () => () => {
-      if (revealTimer.current) clearTimeout(revealTimer.current);
+      if (stepTimer.current) clearTimeout(stepTimer.current);
     },
     [],
   );
@@ -409,7 +300,7 @@ function useAnagram(
   };
 
   const submit = () => {
-    if (done.current || state.finishedAt || reveal) return;
+    if (done.current || state.finishedAt || reveal || success) return;
     const answer = guess.trim().toUpperCase();
     if (!answer) return;
     const target = state.words[state.index];
@@ -417,18 +308,24 @@ function useAnagram(
     setGuess('');
 
     if (ok) {
-      setState((s) => {
-        const startedAt = s.startedAt ?? Date.now();
-        return advance(s, s.correct + 1, s.index + 1, startedAt);
-      });
+      haptic([10, 30, 10]);
+      setSuccess(target);
+      if (stepTimer.current) clearTimeout(stepTimer.current);
+      stepTimer.current = window.setTimeout(() => {
+        setSuccess(null);
+        setState((s) => {
+          const startedAt = s.startedAt ?? Date.now();
+          return advance(s, s.correct + 1, s.index + 1, startedAt);
+        });
+      }, 750);
       return;
     }
 
     // Wrong — reveal the spelling, then move on.
     setReveal(target);
     setMissed((m) => [...m, target]);
-    if (revealTimer.current) clearTimeout(revealTimer.current);
-    revealTimer.current = window.setTimeout(() => {
+    if (stepTimer.current) clearTimeout(stepTimer.current);
+    stepTimer.current = window.setTimeout(() => {
       setReveal(null);
       setState((s) => {
         const startedAt = s.startedAt ?? Date.now();
@@ -447,6 +344,7 @@ function useAnagram(
     setGuess,
     submit,
     reveal,
+    success,
     missed,
     waitingMatchEnd,
     sync,
@@ -460,6 +358,7 @@ function Board({
   setGuess,
   onSubmit,
   reveal,
+  success,
   missed,
   waitingMatchEnd,
   sync,
@@ -471,6 +370,7 @@ function Board({
   setGuess: (v: string) => void;
   onSubmit: () => void;
   reveal: string | null;
+  success: string | null;
   missed: string[];
   waitingMatchEnd?: boolean;
   sync?: RaceSync;
@@ -479,6 +379,7 @@ function Board({
   const done = state.finishedAt !== null;
   const word = state.scrambled[Math.min(state.index, ROUNDS - 1)];
   const waitingNames = sync && waitingMatchEnd ? stillPlayingNames(sync) : [];
+  const locked = !!(reveal || success);
 
   return (
     <div className="ana-board">
@@ -508,8 +409,16 @@ function Board({
           </div>
         ) : !done ? (
           <>
-            <p className="ana-scrambled">{reveal ? reveal : word}</p>
-            {reveal ? (
+            <p
+              className={`ana-scrambled${success ? ' ana-scrambled--ok' : ''}${
+                reveal ? ' ana-scrambled--miss' : ''
+              }`}
+            >
+              {success || reveal || word}
+            </p>
+            {success ? (
+              <p className="ana-ok-note">Nice! ✓</p>
+            ) : reveal ? (
               <p className="ana-reveal-note">It was {reveal}</p>
             ) : (
               <form
@@ -530,8 +439,9 @@ function Board({
                   enterKeyHint="done"
                   autoComplete="off"
                   autoFocus
+                  disabled={locked}
                 />
-                <Button type="submit" variant="gold" block className="ana-submit">
+                <Button type="submit" variant="gold" block className="ana-submit" disabled={locked}>
                   Submit
                 </Button>
               </form>
@@ -554,7 +464,7 @@ function Board({
 }
 
 function SoloView({ initialState, onFinish }: SoloGameProps<AnagramState>) {
-  const { state, elapsed, guess, setGuess, submit, reveal, missed } = useAnagram(
+  const { state, elapsed, guess, setGuess, submit, reveal, success, missed } = useAnagram(
     initialState,
     (correct, ms) =>
       onFinish({
@@ -572,6 +482,7 @@ function SoloView({ initialState, onFinish }: SoloGameProps<AnagramState>) {
       setGuess={setGuess}
       onSubmit={submit}
       reveal={reveal}
+      success={success}
       missed={missed}
     />
   );
@@ -585,26 +496,27 @@ function RaceView(props: RaceGameProps<AnagramState>) {
     finishedPlayers: props.finishedPlayers,
   };
 
-  const { state, elapsed, guess, setGuess, submit, reveal, missed, waitingMatchEnd } = useAnagram(
-    props.initialState,
-    (correct, ms) => {
-      const score = {
-        primary: correct * 100000 - ms,
-        label: `${correct}/${ROUNDS} · ${formatTime(ms)}`,
-        progress: 1,
-      };
-      props.onLocalScore(score);
-      props.onFinish({ score });
-    },
-    (correct, completedWords) => {
-      props.onLocalScore({
-        primary: correct * 1000 + completedWords,
-        label: `${correct} ok · ${completedWords}/${ROUNDS}`,
-        progress: completedWords / ROUNDS,
-      });
-    },
-    sync,
-  );
+  const { state, elapsed, guess, setGuess, submit, reveal, success, missed, waitingMatchEnd } =
+    useAnagram(
+      props.initialState,
+      (correct, ms) => {
+        const score = {
+          primary: correct * 100000 - ms,
+          label: `${correct}/${ROUNDS} · ${formatTime(ms)}`,
+          progress: 1,
+        };
+        props.onLocalScore(score);
+        props.onFinish({ score });
+      },
+      (correct, completedWords) => {
+        props.onLocalScore({
+          primary: correct * 1000 + completedWords,
+          label: `${correct} ok · ${completedWords}/${ROUNDS}`,
+          progress: completedWords / ROUNDS,
+        });
+      },
+      sync,
+    );
 
   return (
     <Board
@@ -614,6 +526,7 @@ function RaceView(props: RaceGameProps<AnagramState>) {
       setGuess={setGuess}
       onSubmit={submit}
       reveal={reveal}
+      success={success}
       missed={missed}
       waitingMatchEnd={waitingMatchEnd}
       sync={sync}

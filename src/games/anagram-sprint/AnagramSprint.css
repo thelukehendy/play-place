@@ -33,6 +33,36 @@
   margin: 0;
   line-height: 1.15;
   word-break: break-word;
+  transition: color 0.15s ease, transform 0.2s var(--bounce);
+}
+
+.ana-scrambled--ok {
+  color: var(--green-dark);
+  animation: ana-ok-pop 0.55s var(--bounce);
+}
+
+.ana-scrambled--miss {
+  color: var(--ink);
+}
+
+@keyframes ana-ok-pop {
+  0% {
+    transform: scale(0.92);
+  }
+  55% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.ana-ok-note {
+  margin: 0;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--green-dark);
+  animation: ana-ok-pop 0.45s var(--bounce);
 }
 
 .ana-form {
