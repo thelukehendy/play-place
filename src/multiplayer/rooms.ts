@@ -202,6 +202,19 @@ export function getPresence(player: RoomPlayer): PlayerPresence {
   return player.presence === 'playing' ? 'playing' : 'lobby';
 }
 
+/** Players still in the live race (opted into the match). Ignores flaky `connected`. */
+export function playersInMatch(room: RoomData): RoomPlayer[] {
+  return Object.values(room.players || {}).filter((p) => getPresence(p) === 'playing');
+}
+
+/** True when every player still in the match has finished — wait for all, not the first. */
+export function allMatchPlayersFinished(room: RoomData): boolean {
+  const racers = playersInMatch(room);
+  if (racers.length === 0) return false;
+  const finished = room.finished || {};
+  return racers.every((p) => !!finished[p.id]);
+}
+
 export function playersList(room: RoomData): RoomPlayer[] {
   return Object.values(room.players || {}).sort((a, b) => a.joinedAt - b.joinedAt);
 }
@@ -398,7 +411,7 @@ export async function quitMatch(code: string, playerId: string) {
   const applyQuit = (room: RoomData): Partial<RoomData> | null => {
     const finished = { ...(room.finished || {}), [playerId]: true };
     const stillPlaying = Object.values(room.players || {}).filter(
-      (p) => p.id !== playerId && p.connected && getPresence(p) === 'playing',
+      (p) => p.id !== playerId && getPresence(p) === 'playing',
     );
     // Quitting player already set to lobby in Firebase/local before this runs —
     // also treat them as not playing when reading a stale snapshot.
@@ -471,10 +484,9 @@ export async function markFinished(code: string, playerId: string) {
     const room = store[normalized];
     if (!room) return;
     room.finished = { ...room.finished, [playerId]: true };
-    const stillPlaying = Object.values(room.players).filter(
-      (p) => p.connected && getPresence(p) === 'playing',
-    );
-    if (stillPlaying.length > 0 && stillPlaying.every((p) => room.finished[p.id])) {
+    // Wait for every player still in the match — not just whoever is connected
+    // this instant (flaky connected flags were ending races for everyone early).
+    if (allMatchPlayersFinished(room)) {
       room.status = 'results';
     }
     writeLocal(store);
@@ -485,11 +497,8 @@ export async function markFinished(code: string, playerId: string) {
   const roomSnap = await get(ref(db, `rooms/${normalized}`));
   if (!roomSnap.exists()) return;
   const room = roomSnap.val() as RoomData;
-  const stillPlaying = Object.values(room.players || {}).filter(
-    (p) => p.connected && getPresence(p) === 'playing',
-  );
-  const finished = room.finished || {};
-  if (stillPlaying.length > 0 && stillPlaying.every((p) => finished[p.id])) {
+  room.finished = { ...(room.finished || {}), [playerId]: true };
+  if (allMatchPlayersFinished(room)) {
     await update(ref(db, `rooms/${normalized}`), { status: 'results' });
   }
 }

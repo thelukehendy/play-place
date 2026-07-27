@@ -659,14 +659,19 @@ function RoomPlay({
 
   const onLocalScore = (score: ScoreValue) => {
     pendingScore.current = score;
-    if (scoreTimer.current) return;
+    // Flush word-progress updates quickly so party rounds can gate on peers.
+    const delay = score.progress !== undefined && score.progress < 1 ? 40 : 120;
+    if (scoreTimer.current) {
+      clearTimeout(scoreTimer.current);
+      scoreTimer.current = null;
+    }
     scoreTimer.current = window.setTimeout(() => {
       scoreTimer.current = null;
       const next = pendingScore.current;
       if (next) {
         updateScore(room.code, player.id, next).catch((err) => onError(String(err)));
       }
-    }, 120);
+    }, delay);
   };
 
   useEffect(

@@ -70,3 +70,19 @@
   text-align: center;
   padding: 4px 0;
 }
+
+.ana-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+  padding: 8px 4px;
+}
+
+.ana-wait-peers {
+  margin: 0;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--sky-deep);
+}
