@@ -78,12 +78,9 @@
   cursor: default;
 }
 
-.inertia-pad {
-  width: 72%;
-  height: 72%;
-  border: 2px dashed rgba(26, 26, 46, 0.28);
-  border-radius: 999px;
-  box-sizing: border-box;
+/* Empty floor — no decorative rings (those are real stoppers). */
+.inertia-cell.empty {
+  background: color-mix(in srgb, #cfd6df 70%, transparent);
 }
 
 .inertia-ball {
@@ -152,13 +149,23 @@
   animation: bob 1.2s ease-in-out infinite;
 }
 
+/* Perforated anchor — ball actually stops here (classic Inertia look). */
 .inertia-stop {
-  width: 70%;
-  height: 70%;
+  width: 78%;
+  height: 78%;
   border-radius: 999px;
-  border: 3px solid var(--ink);
-  background: radial-gradient(circle at 40% 35%, #fff6a8, var(--gold));
+  border: 2.5px dashed color-mix(in srgb, var(--ink) 72%, #5a6a7a);
+  background: color-mix(in srgb, #e8eef4 55%, transparent);
   box-sizing: border-box;
+  z-index: 1;
+}
+
+.inertia-cell.has-gem .inertia-gem {
+  z-index: 2;
+}
+
+.inertia-cell.stop {
+  background: color-mix(in srgb, #cfd6df 55%, transparent);
 }
 
 .inertia-actions {
