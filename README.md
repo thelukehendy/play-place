@@ -16,7 +16,7 @@ Bright toybox / playground vibes (Mario-inspired colors — no Nintendo characte
 8. **Word Claim** — make words in 60s
 9. **Dots & Boxes** — turn-based duel (vs CPU solo)
 10. **Whack Grid** — smash glowing blocks before they vanish
-11. **Inertia** — slide the ball, grab gems, dodge mines
+11. **Inertia** — slide the ball onto dashed anchors, grab gems, dodge mines
 
 ## Live site
 
