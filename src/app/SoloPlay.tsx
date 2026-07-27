@@ -51,7 +51,14 @@ export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
   const Solo = game.SoloView;
 
   return (
-    <div className={`stack solo-play${gameId === 'anagram-sprint' || gameId === 'word-claim' ? ' solo-play--compact' : ''}`} style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
+    <div
+      className={`stack solo-play${
+        gameId === 'anagram-sprint' || gameId === 'word-claim' || gameId === 'inertia'
+          ? ' solo-play--compact'
+          : ''
+      }`}
+      style={{ animation: 'pop-in 0.3s var(--bounce)' }}
+    >
       <ScreenHeader
         title={
           <h2 className="h2" style={{ color: 'var(--gold)', WebkitTextStroke: '1px var(--ink)' }}>
@@ -64,7 +71,13 @@ export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
           </Button>
         }
       />
-      <Panel className={gameId === 'anagram-sprint' || gameId === 'word-claim' ? 'solo-play-panel' : ''}>
+      <Panel
+        className={
+          gameId === 'anagram-sprint' || gameId === 'word-claim' || gameId === 'inertia'
+            ? 'solo-play-panel'
+            : ''
+        }
+      >
         <Solo
           key={seed}
           seed={seed}

@@ -1,30 +1,40 @@
 .inertia-board {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  /* Reserve chrome so the square board never forces page scroll. */
+  --inertia-chrome: 20rem;
+}
+
+.room-play .inertia-board {
+  /* Extra scoreboard + party chrome in race mode */
+  --inertia-chrome: 24rem;
 }
 
 .inertia-board .game-hud {
   margin-bottom: 0;
-  gap: 6px;
+  gap: 4px;
+  flex-wrap: nowrap;
 }
 
 .inertia-board .game-hud .stat {
-  padding: 4px 10px;
-  font-size: 0.78rem;
+  padding: 3px 8px;
+  font-size: 0.72rem;
   border-width: 2px;
+  white-space: nowrap;
 }
 
 .inertia-board .game-rules {
-  margin: 0 0 4px;
-  font-size: 0.82rem;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.25;
 }
 
 .inertia-flash {
   text-align: center;
   font-weight: 800;
-  font-size: 0.9rem;
-  min-height: 1.2rem;
+  font-size: 0.85rem;
+  min-height: 1.1rem;
   margin: 0;
   color: var(--ink);
 }
@@ -34,15 +44,19 @@
 }
 
 .inertia-grid {
+  --board: min(100%, 22rem, calc(100svh - var(--inertia-chrome)), calc(100dvh - var(--inertia-chrome)));
   display: grid;
-  gap: 3px;
-  width: min(100%, 360px);
+  gap: 2px;
+  width: var(--board);
+  height: var(--board);
+  max-width: 100%;
   margin: 0 auto;
-  padding: 6px;
+  padding: 4px;
   background: #d8dee6;
   border: 3px solid var(--ink);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 0 var(--ink);
+  flex-shrink: 0;
 }
 
 .inertia-grid.dead {
@@ -54,17 +68,24 @@
 }
 
 .inertia-cell {
-  aspect-ratio: 1;
   border: none;
   padding: 0;
   margin: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   display: grid;
   place-items: center;
   position: relative;
+  min-width: 0;
   min-height: 0;
+  width: 100%;
+  height: 100%;
   cursor: pointer;
+}
+
+/* Stack ball / gem / stop / mine in one layer — never shrink gems on anchors. */
+.inertia-cell > * {
+  grid-area: 1 / 1;
 }
 
 .inertia-cell:disabled {
@@ -98,13 +119,16 @@
 }
 
 .inertia-gem {
-  width: 58%;
-  height: 58%;
+  width: 52%;
+  height: 52%;
   background: #7de8ff;
   border: 2px solid var(--sky-deep);
   transform: rotate(45deg);
   border-radius: 4px;
   box-shadow: 0 2px 0 rgba(2, 119, 168, 0.35);
+  z-index: 2;
+  /* Keep gem size identical on empty floor and on dashed rings */
+  box-sizing: border-box;
 }
 
 .inertia-mine {
@@ -151,17 +175,13 @@
 
 /* Perforated anchor — ball actually stops here (classic Inertia look). */
 .inertia-stop {
-  width: 78%;
-  height: 78%;
+  width: 82%;
+  height: 82%;
   border-radius: 999px;
   border: 2.5px dashed color-mix(in srgb, var(--ink) 72%, #5a6a7a);
   background: color-mix(in srgb, #e8eef4 55%, transparent);
   box-sizing: border-box;
   z-index: 1;
-}
-
-.inertia-cell.has-gem .inertia-gem {
-  z-index: 2;
 }
 
 .inertia-cell.stop {
@@ -170,21 +190,22 @@
 
 .inertia-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 2px;
 }
 
 .inertia-actions .btn {
   flex: 1;
-  min-height: 42px;
-  font-size: 0.9rem;
-  padding: 0 10px;
+  min-height: 40px;
+  font-size: 0.85rem;
+  padding: 0 8px;
 }
 
 .inertia-hint {
-  margin: 2px 0 0;
+  margin: 0;
   text-align: center;
   font-weight: 800;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   opacity: 0.8;
+  line-height: 1.2;
 }

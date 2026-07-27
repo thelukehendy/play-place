@@ -333,12 +333,15 @@ function Board({
         <Stat>{state.gemsLeft} gems</Stat>
         <Stat>{formatTime(elapsed)}</Stat>
       </GameHud>
-      <Rules text="Tap a direction — the ball slides until a wall or dashed anchor. Grab every gem!" />
+      <Rules text="Tap to slide — dashed rings stop you. Grab every gem!" />
       {state.flash ? <p className="inertia-flash">{state.flash}</p> : <p className="inertia-flash idle">&nbsp;</p>}
 
       <div
         className={`inertia-grid ${dead ? 'dead' : ''} ${cleared ? 'clear' : ''}`}
-        style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
+        style={{
+          gridTemplateColumns: `repeat(${size}, 1fr)`,
+          gridTemplateRows: `repeat(${size}, 1fr)`,
+        }}
       >
         {state.board.cells.map((kind, i) => {
           const isBall = state.board.ball === i;
