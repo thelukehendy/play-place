@@ -523,6 +523,7 @@ function ResultsRoom({
         name: p.name,
         primary: scores[p.id]?.primary ?? 0,
         label: scores[p.id]?.label,
+        lowerIsBetter: scores[p.id]?.lowerIsBetter,
       })),
     });
   }, [room, playerId, players]);
