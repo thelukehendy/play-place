@@ -19,11 +19,19 @@ function ScoreRow({
   score,
   you,
   done,
+  turn,
+  tappable,
+  onTap,
+  extra,
 }: {
   player: PlayerInfo;
   score?: ScoreValue;
   you: boolean;
   done: boolean;
+  turn: boolean;
+  tappable: boolean;
+  onTap?: () => void;
+  extra?: ReactNode;
 }) {
   const prev = useRef(score?.label);
   const [flash, setFlash] = useState(false);
@@ -45,12 +53,13 @@ function ScoreRow({
         ? 1
         : undefined;
 
-  return (
-    <div className={`score-row ${you ? 'you' : ''} ${done ? 'done' : ''} ${flash ? 'flash' : ''}`}>
+  const body = (
+    <>
       <div className="score-main">
         <span className="score-name">
           {player.name}
           {you ? ' (you)' : ''}
+          {turn ? ' · turn' : ''}
         </span>
         <span className="score-status">
           {done ? 'Done ✓' : score ? score.label : 'Waiting…'}
@@ -65,6 +74,26 @@ function ScoreRow({
           <div className="score-bar-fill" style={{ width: done ? '100%' : '0%' }} />
         </div>
       )}
+    </>
+  );
+
+  return (
+    <div
+      className={`score-row ${you ? 'you' : ''} ${done ? 'done' : ''} ${turn ? 'turn' : ''} ${flash ? 'flash' : ''} ${tappable ? 'tappable' : ''}`}
+    >
+      {tappable ? (
+        <button
+          type="button"
+          className="score-row-btn"
+          onClick={onTap}
+          aria-label={`Nudge ${player.name}`}
+        >
+          {body}
+        </button>
+      ) : (
+        body
+      )}
+      {extra}
     </div>
   );
 }
@@ -76,6 +105,11 @@ export function Scoreboard({
   finished = [],
   title = 'Live scores',
   compact = false,
+  turnPlayerId = null,
+  onPlayerTap,
+  canTapPlayer,
+  renderRowExtra,
+  footerHint,
 }: {
   players: PlayerInfo[];
   scores: Record<string, ScoreValue | undefined>;
@@ -83,6 +117,11 @@ export function Scoreboard({
   finished?: string[];
   title?: string;
   compact?: boolean;
+  turnPlayerId?: string | null;
+  onPlayerTap?: (playerId: string) => void;
+  canTapPlayer?: (playerId: string) => boolean;
+  renderRowExtra?: (playerId: string) => ReactNode;
+  footerHint?: string;
 }) {
   const sorted = [...players].sort((a, b) => {
     const aDone = finished.includes(a.id) ? 0 : 1;
@@ -100,15 +139,23 @@ export function Scoreboard({
   return (
     <div className={`scoreboard${compact ? ' scoreboard--compact' : ''}`}>
       {!compact ? <div className="scoreboard-title">{title}</div> : null}
-      {sorted.map((p) => (
-        <ScoreRow
-          key={p.id}
-          player={p}
-          score={scores[p.id]}
-          you={p.id === youId}
-          done={finished.includes(p.id)}
-        />
-      ))}
+      {sorted.map((p) => {
+        const tappable = !!onPlayerTap && (canTapPlayer ? canTapPlayer(p.id) : p.id !== youId);
+        return (
+          <ScoreRow
+            key={p.id}
+            player={p}
+            score={scores[p.id]}
+            you={p.id === youId}
+            done={finished.includes(p.id)}
+            turn={!!turnPlayerId && p.id === turnPlayerId}
+            tappable={tappable}
+            onTap={tappable ? () => onPlayerTap?.(p.id) : undefined}
+            extra={renderRowExtra?.(p.id)}
+          />
+        );
+      })}
+      {footerHint ? <p className="scoreboard-hint">{footerHint}</p> : null}
     </div>
   );
 }

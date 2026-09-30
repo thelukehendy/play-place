@@ -463,6 +463,7 @@ export function RoomSession({
       players={players
         .filter((p) => getPresence(p) === 'playing')
         .map((p) => ({ id: p.id, name: p.name }))}
+      now={now}
       onError={setError}
       onQuitGame={onQuitGame}
     />
@@ -501,6 +502,7 @@ function ReadyPlayerList({
     [youId],
   );
   const isHost = room.hostId === youId;
+  const matchLive = isMatchLive(room, now);
 
   return (
     <ul style={{ paddingLeft: 0, listStyle: 'none', fontWeight: 700, margin: 0 }}>
@@ -509,15 +511,25 @@ function ReadyPlayerList({
         const status = playerStatusLabel(room, p, now);
         const nudge = room.nudges?.[p.id];
         const nudgedAgo = nudge ? now - nudge.at : 0;
-        const canNudge =
-          online && !p.ready && p.id !== youId && (room.status === 'lobby' || room.status === 'results');
+        const canNudgeLobby =
+          online &&
+          !p.ready &&
+          p.id !== youId &&
+          (room.status === 'lobby' || room.status === 'results');
+        const canNudgeMatch =
+          matchLive &&
+          p.id !== youId &&
+          getPresence(p) === 'playing' &&
+          !room.finished?.[p.id];
+        const canNudge = canNudgeLobby || canNudgeMatch;
+        const nudgeText = canNudgeMatch ? 'Hurry up!' : 'Ready to go?';
         const canRemoveAfterNudge =
           canNudge &&
           !!nudge &&
           (nudge.fromId === youId || isHost) &&
           nudgedAgo >= NUDGE_REMOVE_MS;
         const canRemoveAway = isHost && !online && p.id !== youId;
-        const canMakeHost = isHost && online && p.id !== youId;
+        const canMakeHost = isHost && online && p.id !== youId && !matchLive;
 
         return (
           <li key={p.id} style={{ marginBottom: 10 }}>
@@ -527,7 +539,9 @@ function ReadyPlayerList({
               disabled={!canNudge}
               onClick={() => {
                 if (!canNudge) return;
-                nudgePlayer(room.code, p.id, you).catch((err) => onError?.(String(err)));
+                nudgePlayer(room.code, p.id, you, nudgeText).catch((err) =>
+                  onError?.(String(err)),
+                );
               }}
             >
               {p.name}
@@ -537,7 +551,7 @@ function ReadyPlayerList({
             </button>
             {canNudge ? (
               <p className="muted" style={{ fontSize: '0.8rem', margin: '2px 0 0 4px' }}>
-                Tap name to nudge “Ready to go?”
+                Tap name to nudge “{nudgeText}”
               </p>
             ) : null}
             {canRemoveAway ? (
@@ -546,6 +560,7 @@ function ReadyPlayerList({
                 block
                 style={{ marginTop: 4 }}
                 onClick={() => {
+                  if (!window.confirm(`Remove ${p.name} from the party?`)) return;
                   removePlayer(room.code, p.id).catch((err) => onError?.(String(err)));
                 }}
               >
@@ -558,6 +573,7 @@ function ReadyPlayerList({
                 block
                 style={{ marginTop: 4 }}
                 onClick={() => {
+                  if (!window.confirm(`Remove ${p.name} from the party?`)) return;
                   removePlayer(room.code, p.id)
                     .then(() => clearNudge(room.code, p.id))
                     .catch((err) => onError?.(String(err)));
@@ -804,6 +820,7 @@ function RoomPlay({
   game,
   player,
   players,
+  now,
   onError,
   onQuitGame,
 }: {
@@ -812,6 +829,7 @@ function RoomPlay({
   game: NonNullable<ReturnType<typeof getGame>>;
   player: { id: string; name: string };
   players: { id: string; name: string }[];
+  now: number;
   onError: (e: string) => void;
   onQuitGame: () => void;
 }) {
@@ -886,9 +904,52 @@ function RoomPlay({
   const turnState = room.gameState as { turn?: number } | null;
   const turnIdx = typeof turnState?.turn === 'number' ? turnState.turn : -1;
   const turnPlayer = turnIdx >= 0 ? livePlayers[turnIdx] : null;
-  const myTurn = !!turnPlayer && turnPlayer.id === player.id;
-  const canNudgeTurn =
-    game.modes.includes('turn') && !!turnPlayer && !myTurn && !room.finished?.[player.id];
+  const isHost = room.hostId === player.id;
+  const othersLeft = livePlayers.some((p) => p.id !== player.id);
+
+  const canTapPlayer = (id: string) => id !== player.id;
+
+  const onTapPlayer = (id: string) => {
+    const target = livePlayers.find((p) => p.id === id);
+    if (!target) return;
+    const text =
+      game.modes.includes('turn') && turnPlayer?.id === id ? 'Your turn!' : 'Hurry up!';
+    nudgePlayer(room.code, id, player, text).catch((err) => onError(String(err)));
+  };
+
+  const renderRowExtra = (id: string) => {
+    if (id === player.id) return null;
+    const target = livePlayers.find((p) => p.id === id);
+    if (!target) return null;
+    const roomPlayer = room.players?.[id];
+    const online = roomPlayer ? isPlayerOnline(roomPlayer, now) : false;
+    const nudge = room.nudges?.[id];
+    const nudgedAgo = nudge ? now - nudge.at : 0;
+    const canRemoveAfterNudge =
+      !!nudge &&
+      (nudge.fromId === player.id || isHost) &&
+      nudgedAgo >= NUDGE_REMOVE_MS;
+    const canRemoveAway = isHost && !online;
+    if (!canRemoveAfterNudge && !canRemoveAway) return null;
+    return (
+      <div className="score-row-actions">
+        <Button
+          variant="ghost"
+          block
+          onClick={() => {
+            const label = canRemoveAway && !canRemoveAfterNudge ? ' (away)' : '';
+            if (!window.confirm(`Remove ${target.name}${label} from the party?`)) return;
+            removePlayer(room.code, id)
+              .then(() => clearNudge(room.code, id))
+              .catch((err) => onError(String(err)));
+          }}
+        >
+          Remove {target.name}
+          {canRemoveAway && !canRemoveAfterNudge ? ' (away)' : ''}
+        </Button>
+      </div>
+    );
+  };
 
   return (
     <div className="stack room-play" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
@@ -912,21 +973,16 @@ function RoomPlay({
           scores={room.scores || {}}
           youId={player.id}
           finished={finishedPlayers}
+          turnPlayerId={turnPlayer?.id ?? null}
+          onPlayerTap={othersLeft ? onTapPlayer : undefined}
+          canTapPlayer={canTapPlayer}
+          renderRowExtra={othersLeft ? renderRowExtra : undefined}
+          footerHint={
+            othersLeft
+              ? 'Tap a name to nudge · remove appears after a nudge (or if they go away)'
+              : undefined
+          }
         />
-        {canNudgeTurn && turnPlayer ? (
-          <Button
-            variant="sky"
-            block
-            style={{ marginBottom: 8 }}
-            onClick={() => {
-              nudgePlayer(room.code, turnPlayer.id, player, 'Your turn!').catch((err) =>
-                onError(String(err)),
-              );
-            }}
-          >
-            Nudge {turnPlayer.name} — your turn!
-          </Button>
-        ) : null}
         <p className="muted" style={{ fontSize: '0.8rem', margin: '0 0 8px', textAlign: 'center' }}>
           Quit game keeps you in the party lobby
         </p>

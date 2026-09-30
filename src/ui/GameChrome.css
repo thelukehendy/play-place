@@ -78,9 +78,66 @@
   background: #d8f5d8;
 }
 
+.score-row.turn:not(.you) {
+  border-color: var(--sky);
+  background: #e8f7ff;
+}
+
 .score-row.flash {
   transform: scale(1.02);
   box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.55);
+}
+
+.score-row.tappable {
+  padding: 0;
+}
+
+.score-row-btn {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  border-radius: inherit;
+}
+
+.scoreboard--compact .score-row-btn {
+  padding: 4px 8px;
+}
+
+.score-row-btn:active {
+  opacity: 0.75;
+}
+
+.score-row.tappable .score-name {
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+
+.score-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px 8px;
+}
+
+.scoreboard--compact .score-row-actions {
+  padding: 0 6px 6px;
+}
+
+.scoreboard-hint {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.75;
+  text-align: center;
 }
 
 .score-main {
