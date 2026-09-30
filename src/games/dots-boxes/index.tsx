@@ -6,7 +6,7 @@ import type {
   SoloGameProps,
   TurnGameProps,
 } from '../types';
-import { GameHud, Rules, Stat } from '../../ui/GameChrome';
+import { Rules } from '../../ui/GameChrome';
 import './DotsBoxes.css';
 
 const GRID = 3; // 3x3 boxes => 4x4 dots
@@ -127,11 +127,14 @@ const OWNER_CLASS = ['', 'p1', 'p2', 'p3', 'p4'];
 function Board({
   state,
   names,
+  meIndex,
   canPlay,
   onEdge,
 }: {
   state: DotsState;
   names: string[];
+  /** Seat index of the local viewer, or -1 if spectating. */
+  meIndex: number;
   canPlay: boolean;
   onEdge: (kind: 'h' | 'v', index: number) => void;
 }) {
@@ -140,82 +143,114 @@ function Board({
   const leaders = scores
     .map((s, i) => (s === best ? names[i] : null))
     .filter(Boolean) as string[];
+  const turnName = names[state.turn] ?? `P${state.turn + 1}`;
+  const myTurn = !state.over && meIndex >= 0 && state.turn === meIndex;
+  const turnClass = OWNER_CLASS[state.turn + 1] ?? 'p1';
 
   return (
     <div>
-      <GameHud>
-        {names.map((n, i) => (
-          <Stat key={n + i}>
-            {n}: {scores[i] ?? 0}
-          </Stat>
-        ))}
-      </GameHud>
-      <Rules text="Claim lines. Complete a box to go again. 1–4 players." />
-      <p className="dab-turn">
+      <div className="dab-roster" role="list" aria-label="Players">
+        {names.map((n, i) => {
+          const active = !state.over && state.turn === i;
+          const isYou = meIndex === i;
+          return (
+            <div
+              key={`${n}-${i}`}
+              role="listitem"
+              className={`dab-seat ${OWNER_CLASS[i + 1]} ${active ? 'is-turn' : ''} ${
+                isYou ? 'is-you' : ''
+              }`}
+            >
+              <span className="dab-seat-name">
+                {n}
+                {isYou ? ' (you)' : ''}
+              </span>
+              <span className="dab-seat-score">{scores[i] ?? 0}</span>
+              {active ? <span className="dab-seat-badge">Turn</span> : null}
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        className={`dab-turn-banner ${state.over ? 'is-over' : myTurn ? 'is-mine' : 'is-theirs'} ${turnClass}`}
+        role="status"
+        aria-live="polite"
+      >
         {state.over
           ? leaders.length > 1
             ? `Tie: ${leaders.join(', ')}`
             : `${leaders[0] ?? 'Someone'} wins!`
-          : `Turn: ${names[state.turn] ?? `P${state.turn + 1}`}`}
-      </p>
-      <div className="dab-board">
-        {Array.from({ length: GRID + 1 }, (_, r) => (
-          <div key={`hr-${r}`}>
-            <div className="dab-row">
-              {Array.from({ length: GRID }, (_, c) => {
-                const hi = r * GRID + c;
-                const owner = state.h[hi];
-                return (
-                  <div key={`h-${hi}`} className="dab-row" style={{ flex: 1 }}>
-                    <div className="dab-dot" />
-                    <button
-                      type="button"
-                      className={`dab-h ${owner ? 'on' : ''} ${OWNER_CLASS[owner] ?? ''}`}
-                      disabled={!canPlay || !!owner || state.over}
-                      onClick={() => onEdge('h', hi)}
-                      aria-label="Horizontal line"
-                    />
-                    {c === GRID - 1 ? <div className="dab-dot" /> : null}
-                  </div>
-                );
-              })}
-            </div>
-            {r < GRID ? (
+          : myTurn
+            ? 'Your turn — claim a line'
+            : `Waiting for ${turnName}`}
+      </div>
+
+      <Rules text="Claim lines. Complete a box to go again. 1–4 players." />
+
+      <div className={`dab-board-wrap ${canPlay ? 'can-play' : 'waiting'}`}>
+        {!state.over && !canPlay ? (
+          <p className="dab-wait-hint">Hang tight — not your turn</p>
+        ) : null}
+        <div className="dab-board">
+          {Array.from({ length: GRID + 1 }, (_, r) => (
+            <div key={`hr-${r}`}>
               <div className="dab-row">
                 {Array.from({ length: GRID }, (_, c) => {
-                  const vi = r * (GRID + 1) + c;
-                  const owner = state.v[vi];
-                  const box = state.boxes[r * GRID + c];
+                  const hi = r * GRID + c;
+                  const owner = state.h[hi];
                   return (
-                    <div key={`vr-${vi}`} className="dab-row" style={{ flex: 1 }}>
+                    <div key={`h-${hi}`} className="dab-row" style={{ flex: 1 }}>
+                      <div className="dab-dot" />
                       <button
                         type="button"
-                        className={`dab-v ${owner ? 'on' : ''} ${OWNER_CLASS[owner] ?? ''}`}
+                        className={`dab-h ${owner ? 'on' : ''} ${OWNER_CLASS[owner] ?? ''}`}
                         disabled={!canPlay || !!owner || state.over}
-                        onClick={() => onEdge('v', vi)}
-                        aria-label="Vertical line"
+                        onClick={() => onEdge('h', hi)}
+                        aria-label="Horizontal line"
                       />
-                      <div className={`dab-box ${OWNER_CLASS[box] ?? ''}`}>
-                        {box ? `P${box}` : ''}
-                      </div>
-                      {c === GRID - 1 ? (
-                        <button
-                          type="button"
-                          className={`dab-v ${state.v[vi + 1] ? 'on' : ''} ${
-                            OWNER_CLASS[state.v[vi + 1]] ?? ''
-                          }`}
-                          disabled={!canPlay || !!state.v[vi + 1] || state.over}
-                          onClick={() => onEdge('v', vi + 1)}
-                          aria-label="Vertical line"
-                        />
-                      ) : null}
+                      {c === GRID - 1 ? <div className="dab-dot" /> : null}
                     </div>
                   );
                 })}
               </div>
-            ) : null}
-          </div>
-        ))}
+              {r < GRID ? (
+                <div className="dab-row">
+                  {Array.from({ length: GRID }, (_, c) => {
+                    const vi = r * (GRID + 1) + c;
+                    const owner = state.v[vi];
+                    const box = state.boxes[r * GRID + c];
+                    return (
+                      <div key={`vr-${vi}`} className="dab-row" style={{ flex: 1 }}>
+                        <button
+                          type="button"
+                          className={`dab-v ${owner ? 'on' : ''} ${OWNER_CLASS[owner] ?? ''}`}
+                          disabled={!canPlay || !!owner || state.over}
+                          onClick={() => onEdge('v', vi)}
+                          aria-label="Vertical line"
+                        />
+                        <div className={`dab-box ${OWNER_CLASS[box] ?? ''}`}>
+                          {box ? `P${box}` : ''}
+                        </div>
+                        {c === GRID - 1 ? (
+                          <button
+                            type="button"
+                            className={`dab-v ${state.v[vi + 1] ? 'on' : ''} ${
+                              OWNER_CLASS[state.v[vi + 1]] ?? ''
+                            }`}
+                            disabled={!canPlay || !!state.v[vi + 1] || state.over}
+                            onClick={() => onEdge('v', vi + 1)}
+                            aria-label="Vertical line"
+                          />
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -285,6 +320,7 @@ function SoloView({ initialState, player, onFinish, onStateChange }: SoloGamePro
     <Board
       state={state}
       names={[player.name, 'CPU']}
+      meIndex={0}
       canPlay={state.turn === 0 && !state.over}
       onEdge={play}
     />
@@ -327,6 +363,7 @@ function TurnView({
     <Board
       state={state}
       names={seats.map((p, i) => p.name || `P${i + 1}`)}
+      meIndex={meIndex}
       canPlay={canPlay}
       onEdge={play}
     />

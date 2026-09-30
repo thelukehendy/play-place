@@ -1,3 +1,155 @@
+.dab-roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.dab-seat {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  font-weight: 800;
+  min-height: 44px;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.dab-seat.p1 {
+  border-color: var(--red);
+}
+
+.dab-seat.p2 {
+  border-color: var(--green);
+}
+
+.dab-seat.p3 {
+  border-color: var(--sky);
+}
+
+.dab-seat.p4 {
+  border-color: var(--gold);
+}
+
+.dab-seat.is-turn {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+  background: #fff8e6;
+}
+
+.dab-seat.p1.is-turn {
+  background: rgba(229, 37, 33, 0.18);
+}
+
+.dab-seat.p2.is-turn {
+  background: rgba(67, 176, 71, 0.2);
+}
+
+.dab-seat.p3.is-turn {
+  background: rgba(4, 156, 216, 0.18);
+}
+
+.dab-seat.p4.is-turn {
+  background: rgba(245, 197, 24, 0.28);
+}
+
+.dab-seat-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.92rem;
+}
+
+.dab-seat-score {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+.dab-seat-badge {
+  position: absolute;
+  top: -9px;
+  right: 8px;
+  background: var(--ink);
+  color: #fff8e6;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  animation: dab-pulse 1.1s ease-in-out infinite;
+}
+
+.dab-turn-banner {
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.15rem;
+  line-height: 1.25;
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: #fff8e6;
+}
+
+.dab-turn-banner.is-mine {
+  background: rgba(67, 176, 71, 0.28);
+  border-color: var(--green-dark, #2f7d34);
+  animation: dab-pulse 1.1s ease-in-out infinite;
+  color: var(--green-dark, #1f5f24);
+}
+
+.dab-turn-banner.is-theirs {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink);
+}
+
+.dab-turn-banner.is-over {
+  background: rgba(245, 197, 24, 0.35);
+}
+
+.dab-turn-banner.p1.is-theirs {
+  border-color: var(--red);
+}
+
+.dab-turn-banner.p2.is-theirs {
+  border-color: var(--green);
+}
+
+.dab-turn-banner.p3.is-theirs {
+  border-color: var(--sky);
+}
+
+.dab-turn-banner.p4.is-theirs {
+  border-color: var(--gold);
+}
+
+.dab-board-wrap {
+  position: relative;
+}
+
+.dab-board-wrap.waiting .dab-board {
+  opacity: 0.72;
+  filter: saturate(0.85);
+}
+
+.dab-wait-hint {
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  margin: 0 0 8px;
+  color: var(--ink);
+  opacity: 0.75;
+}
+
 .dab-board {
   display: flex;
   flex-direction: column;
@@ -5,6 +157,12 @@
   max-width: 320px;
   margin: 0 auto;
   user-select: none;
+}
+
+.dab-board-wrap.can-play .dab-board {
+  outline: 3px solid rgba(67, 176, 71, 0.55);
+  outline-offset: 6px;
+  border-radius: 8px;
 }
 
 .dab-row {
@@ -37,6 +195,12 @@
   border: none;
   border-radius: 4px;
   margin: -1px 0;
+}
+
+.dab-board-wrap.can-play .dab-h:not(.on):not(:disabled),
+.dab-board-wrap.can-play .dab-v:not(.on):not(:disabled) {
+  background: #c8e6c9;
+  cursor: pointer;
 }
 
 .dab-h.on,
@@ -93,8 +257,19 @@
   color: #8a6a00;
 }
 
-.dab-turn {
-  text-align: center;
-  font-weight: 800;
-  margin-bottom: 10px;
+@keyframes dab-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dab-seat-badge,
+  .dab-turn-banner.is-mine {
+    animation: none;
+  }
 }
