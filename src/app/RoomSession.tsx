@@ -524,7 +524,7 @@ function ReadyPlayerList({
         const canNudge = canNudgeLobby || canNudgeMatch;
         const nudgeText = canNudgeMatch ? 'Hurry up!' : 'Ready to go?';
         const canRemoveAfterNudge =
-          canNudge &&
+          p.id !== youId &&
           !!nudge &&
           (nudge.fromId === youId || isHost) &&
           nudgedAgo >= NUDGE_REMOVE_MS;
