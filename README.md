@@ -116,7 +116,6 @@ Set the same `VITE_FIREBASE_*` values as GitHub Actions secrets / env vars at bu
 - Players who go away mid-match are forfeited so the round can finish
 - Joining mid-match parks you in the lobby until the next game
 - Host can **Make X host** from the player list
-- Optional **party voice**: Join voice → **Hold to talk** (release to mute). Works in silent mode; use volume buttons. Needs mic permission once.
 
 Without Firebase configured, the app still runs in **demo mode**: rooms are stored in `localStorage` on that browser only (great for UI testing, not cross-device).
 

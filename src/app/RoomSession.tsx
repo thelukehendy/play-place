@@ -37,7 +37,6 @@ import { copyText, roomInviteUrl, shareRoomInvite } from '../lib/invite';
 import { recordMultiplayerMatch } from '../lib/stats';
 import { sfxCountdown, sfxFinish, sfxGo, sfxReady } from '../lib/sfx';
 import { ScreenHeader } from './PartyChat';
-import { subscribeVoiceMembers } from '../multiplayer/voice';
 
 type Props = {
   code: string;
@@ -502,20 +501,12 @@ function ReadyPlayerList({
     [youId],
   );
   const isHost = room.hostId === youId;
-  const [talkingIds, setTalkingIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    return subscribeVoiceMembers(room.code, (members) => {
-      setTalkingIds(new Set(members.filter((m) => m.talking).map((m) => m.id)));
-    });
-  }, [room.code]);
 
   return (
     <ul style={{ paddingLeft: 0, listStyle: 'none', fontWeight: 700, margin: 0 }}>
       {players.map((p: RoomPlayer) => {
         const online = isPlayerOnline(p, now);
         const status = playerStatusLabel(room, p, now);
-        const isTalking = talkingIds.has(p.id);
         const nudge = room.nudges?.[p.id];
         const nudgedAgo = nudge ? now - nudge.at : 0;
         const canNudge =
@@ -542,8 +533,7 @@ function ReadyPlayerList({
               {p.name}
               {p.id === room.hostId ? ' 👑' : ''}
               {p.id === youId ? ' (you)' : ''}
-              {isTalking ? ' 🎙️' : ''}
-              <span className="muted"> — {isTalking ? 'talking' : status}</span>
+              <span className="muted"> — {status}</span>
             </button>
             {canNudge ? (
               <p className="muted" style={{ fontSize: '0.8rem', margin: '2px 0 0 4px' }}>

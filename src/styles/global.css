@@ -51,14 +51,6 @@ body {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   overflow-x: hidden;
-  overscroll-behavior-y: none;
-}
-
-/* During live matches — reduce accidental Safari pull-to-refresh. */
-body.match-lock-scroll {
-  overscroll-behavior: none;
-  overflow: hidden;
-  touch-action: pan-x pan-y;
 }
 
 /* iOS: 16px+ inputs avoid focus zoom */

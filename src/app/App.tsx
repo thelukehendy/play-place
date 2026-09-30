@@ -27,9 +27,7 @@ import type { GameFinishPayload } from '../games/types';
 import { Panel } from '../ui/Panel';
 import { Button } from '../ui/Button';
 import { PartyChatProvider } from './PartyChat';
-import { PartyVoice } from './PartyVoice';
 import { loadWordDict } from '../games/word-claim/dictionary';
-import { clearOwnVoice } from '../multiplayer/voice';
 
 const ACTIVE_ROOM_KEY = 'playplace.activeRoom';
 
@@ -87,15 +85,6 @@ export function App() {
   useEffect(() => {
     void loadWordDict().catch(() => undefined);
   }, []);
-
-  useEffect(() => {
-    const lock =
-      screen.name === 'room' &&
-      !!roomSnap &&
-      (roomSnap.status === 'playing' || roomSnap.status === 'countdown');
-    document.body.classList.toggle('match-lock-scroll', lock);
-    return () => document.body.classList.remove('match-lock-scroll');
-  }, [screen.name, roomSnap]);
 
   const bindRoom = useCallback((code: string) => {
     const normalized = code.toUpperCase();
@@ -229,7 +218,6 @@ export function App() {
     setScreen({ name: 'library' });
     if (code) {
       try {
-        await clearOwnVoice(code, playerId);
         await leaveRoom(code, playerId);
       } catch {
         /* ignore */
@@ -289,23 +277,9 @@ export function App() {
     document.body.scrollTop = 0;
   }, [screen.name]);
 
-  const showVoice =
-    !!roomCode && (screen.name === 'room' || screen.name === 'library');
-
   return (
     <PartyChatProvider code={showPartyChat ? roomCode : null}>
       <div className="app-shell">
-        {showVoice && roomCode ? (
-          <PartyVoice
-            code={roomCode}
-            compact={
-              screen.name === 'room' &&
-              !!roomSnap &&
-              (roomSnap.status === 'playing' || roomSnap.status === 'countdown')
-            }
-          />
-        ) : null}
-
         {error ? (
           <Panel>
             <p style={{ fontWeight: 800, marginBottom: 10 }}>{error}</p>

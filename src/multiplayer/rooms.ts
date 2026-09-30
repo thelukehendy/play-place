@@ -722,8 +722,6 @@ export async function leaveRoom(code: string, playerId: string, opts?: { kicked?
   await remove(ref(db, `rooms/${normalized}/nudges/${playerId}`));
   await remove(ref(db, `rooms/${normalized}/finished/${playerId}`));
   await remove(ref(db, `rooms/${normalized}/scores/${playerId}`));
-  await remove(ref(db, `rooms/${normalized}/voice/members/${playerId}`)).catch(() => undefined);
-  await remove(ref(db, `rooms/${normalized}/voice/inbox/${playerId}`)).catch(() => undefined);
 
   const remainingIds = Object.keys(room.players || {}).filter((id) => id !== playerId);
   if (remainingIds.length === 0) {
