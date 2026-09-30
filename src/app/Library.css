@@ -132,6 +132,12 @@
   color: var(--red);
 }
 
+.game-card-voted {
+  outline: 3px solid var(--green);
+  outline-offset: 2px;
+  background: rgba(67, 176, 71, 0.12);
+}
+
 .game-card-locked {
   opacity: 0.55;
   filter: grayscale(0.15);

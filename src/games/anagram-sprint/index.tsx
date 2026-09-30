@@ -438,7 +438,7 @@ function Board({
                   placeholder="YOUR GUESS"
                   enterKeyHint="done"
                   autoComplete="off"
-                  autoFocus
+                  inputMode="text"
                   disabled={locked}
                 />
                 <Button type="submit" variant="gold" block className="ana-submit" disabled={locked}>

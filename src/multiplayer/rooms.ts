@@ -48,6 +48,8 @@ export type RoomData = {
   nudges?: Record<string, Nudge>;
   /** Soft notices (join/leave/host) for toasts — pruned. */
   notices?: Record<string, RoomNotice>;
+  /** Guest game wishes — playerId → gameId. */
+  suggestions?: Record<string, string>;
 };
 
 export type ChatMessage = {
@@ -61,6 +63,7 @@ export type Nudge = {
   fromId: string;
   fromName: string;
   at: number;
+  text?: string;
 };
 
 export type RoomNotice = {
@@ -74,14 +77,22 @@ export type RoomNotice = {
 const LOCAL_ROOMS_KEY = 'playplace.localRooms';
 export const MAX_PLAYERS = 4;
 
-/** Consider a player away if disconnected or heartbeat is this stale. */
-export const AWAY_MS = 18_000;
+/**
+ * Soft away: connected but heartbeat stale (typical iPhone lock / app switch).
+ * Hard away: connected:false from pagehide / long background.
+ */
+export const SOFT_AWAY_MS = 45_000;
+export const HARD_AWAY_MS = 20_000;
+/** @deprecated alias — soft threshold for UI “away” labels */
+export const AWAY_MS = SOFT_AWAY_MS;
 /** Promote a new host when the current host has been away this long. */
-export const HOST_AWAY_MS = 10_000;
-/** Auto-forfeit a match participant after being away this long. */
-export const MATCH_FORFEIT_MS = 22_000;
+export const HOST_AWAY_MS = 40_000;
+/** Auto-forfeit a race participant after hard/soft away this long. */
+export const MATCH_FORFEIT_MS = 55_000;
+/** Turn-based games get a longer forfeit grace (thinking + lock screen). */
+export const TURN_FORFEIT_MS = 100_000;
 /** Auto-prune ghost players (fully leave) after being away this long. */
-export const PRUNE_AWAY_MS = 90_000;
+export const PRUNE_AWAY_MS = 180_000;
 export const HEARTBEAT_MS = 4_000;
 export const NUDGE_REMOVE_MS = 6_000;
 
@@ -319,29 +330,29 @@ export function getPresence(player: RoomPlayer): PlayerPresence {
 }
 
 export function isPlayerOnline(player: RoomPlayer, now = nowMs()): boolean {
-  if (!player.connected) return false;
   const seen = player.lastSeenAt ?? player.joinedAt ?? 0;
-  if (seen && now - seen > AWAY_MS) return false;
-  return true;
+  const stale = seen ? now - seen : 0;
+  if (!player.connected) {
+    // Hard disconnect — brief grace so flickers don't flash "away".
+    return stale < 2_000;
+  }
+  // Soft: still connected but heartbeat paused (lock screen).
+  return stale <= SOFT_AWAY_MS;
 }
 
 export function playerAwayMs(player: RoomPlayer, now = nowMs()): number {
-  if (!player.connected) {
-    const seen = player.lastSeenAt ?? player.joinedAt ?? now;
-    return Math.max(0, now - seen);
-  }
   const seen = player.lastSeenAt ?? player.joinedAt ?? now;
   return Math.max(0, now - seen);
 }
 
-/** Countdown finished and match is (or should be) live. */
-export function isMatchLive(room: RoomData, now = nowMs()): boolean {
-  if (room.status === 'playing') return true;
-  if (room.status === 'countdown') {
-    const ends = room.countdownEndsAt ?? 0;
-    return ends > 0 && now >= ends;
-  }
-  return false;
+/** True only after shared countdown promotes — avoids clock-skew early starts. */
+export function isMatchLive(room: RoomData, _now = nowMs()): boolean {
+  return room.status === 'playing';
+}
+
+export function matchForfeitMs(room: RoomData): number {
+  const game = getGame(room.gameId);
+  return game?.modes.includes('turn') ? TURN_FORFEIT_MS : MATCH_FORFEIT_MS;
 }
 
 export function isCountdownActive(room: RoomData, now = nowMs()): boolean {
@@ -506,6 +517,7 @@ export async function setRoomGame(code: string, gameId: string) {
     room.finished = {};
     room.gameState = null;
     room.countdownEndsAt = null;
+    room.suggestions = {};
     for (const p of Object.values(room.players)) {
       p.presence = 'lobby';
       p.ready = false;
@@ -524,6 +536,7 @@ export async function setRoomGame(code: string, gameId: string) {
     finished: {},
     gameState: null,
     countdownEndsAt: null,
+    suggestions: null,
   };
   for (const id of Object.keys(players)) {
     updates[`players/${id}/presence`] = 'lobby';
@@ -554,13 +567,11 @@ async function beginCountdown(
     room.finished = {};
     room.gameState = null;
     room.winnerId = null;
+    room.suggestions = {};
     for (const p of Object.values(room.players)) {
       const online = isPlayerOnline(p, t);
       p.presence = online ? 'playing' : 'lobby';
       p.ready = false;
-      if (!online) {
-        // Away players sit out this match.
-      }
     }
     writeLocal(store);
     return;
@@ -577,6 +588,7 @@ async function beginCountdown(
     finished: {},
     gameState: null,
     winnerId: null,
+    suggestions: null,
   };
   if (opts.gameId) updates.gameId = opts.gameId;
   for (const [id, p] of Object.entries(players)) {
@@ -1010,7 +1022,75 @@ export async function markFinished(code: string, playerId: string) {
 }
 
 export async function setSharedGameState(code: string, gameState: unknown) {
+  const normalized = code.trim().toUpperCase();
+  const nextSeq =
+    gameState &&
+    typeof gameState === 'object' &&
+    typeof (gameState as { seq?: unknown }).seq === 'number'
+      ? ((gameState as { seq: number }).seq as number)
+      : null;
+
+  if (nextSeq != null) {
+    // Reject stale turn writes (last-write-wins races on laggy phones).
+    if (!isFirebaseConfigured()) {
+      const store = readLocal();
+      const room = store[normalized];
+      if (!room) return;
+      const cur = room.gameState as { seq?: number } | null;
+      if (cur && typeof cur.seq === 'number' && nextSeq <= cur.seq) return;
+      room.gameState = gameState;
+      writeLocal(store);
+      return;
+    }
+    const { db } = getFirebase();
+    const snap = await get(ref(db, `rooms/${normalized}/gameState`));
+    const cur = snap.exists() ? (snap.val() as { seq?: number }) : null;
+    if (cur && typeof cur.seq === 'number' && nextSeq <= cur.seq) return;
+  }
+
   await patchRoom(code, { gameState });
+}
+
+export async function suggestGame(code: string, playerId: string, gameId: string) {
+  const normalized = code.trim().toUpperCase();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    room.suggestions = { ...(room.suggestions || {}), [playerId]: gameId };
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await set(ref(db, `rooms/${normalized}/suggestions/${playerId}`), gameId);
+}
+
+export async function clearSuggestions(code: string) {
+  const normalized = code.trim().toUpperCase();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    room.suggestions = {};
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await remove(ref(db, `rooms/${normalized}/suggestions`));
+}
+
+export function suggestionTally(
+  room: RoomData,
+): { gameId: string; count: number; names: string[] }[] {
+  const votes = room.suggestions || {};
+  const byGame: Record<string, string[]> = {};
+  for (const [pid, gameId] of Object.entries(votes)) {
+    const name = room.players?.[pid]?.name ?? 'Someone';
+    (byGame[gameId] ||= []).push(name);
+  }
+  return Object.entries(byGame)
+    .map(([gameId, names]) => ({ gameId, count: names.length, names }))
+    .sort((a, b) => b.count - a.count || a.gameId.localeCompare(b.gameId));
 }
 
 export async function finishTurnGame(code: string, winnerId?: string) {
@@ -1057,9 +1137,15 @@ export async function nudgePlayer(
   code: string,
   targetId: string,
   from: PlayerInfo,
+  text = 'Ready to go?',
 ) {
   const normalized = code.trim().toUpperCase();
-  const nudge: Nudge = { fromId: from.id, fromName: from.name, at: nowMs() };
+  const nudge: Nudge = {
+    fromId: from.id,
+    fromName: from.name,
+    at: nowMs(),
+    text: text.slice(0, 80),
+  };
   if (!isFirebaseConfigured()) {
     const store = readLocal();
     const room = store[normalized];
@@ -1144,8 +1230,9 @@ export async function reconcileRoom(code: string, actorId: string): Promise<void
       for (const p of playersInMatch(room)) {
         if (p.id === actorId) continue;
         if (isPlayerOnline(p, t)) continue;
-        if (playerAwayMs(p, t) < MATCH_FORFEIT_MS) continue;
-        // Only one reconciler: oldest online player
+        const need = matchForfeitMs(room);
+        if (playerAwayMs(p, t) < need) continue;
+        // Soft-away (still connected) needs the full grace; hard disconnect too.
         const leader = onlinePlayers(room, t)[0];
         if (leader && leader.id === actorId) {
           await forfeitMatchPlayer(normalized, p.id);

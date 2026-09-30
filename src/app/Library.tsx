@@ -1,10 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { GAMES } from '../games/registry';
+import { GAMES, getGame } from '../games/registry';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
 import { PartyLinked } from './PartyLinked';
 import { ScreenHeader } from './PartyChat';
+import { getOrCreatePlayerId } from '../lib/player';
+import {
+  suggestGame,
+  suggestionTally,
+  subscribeRoom,
+  type RoomData,
+} from '../multiplayer/rooms';
+import { loadWordDict } from '../games/word-claim/dictionary';
 import './Library.css';
 
 type Props = {
@@ -17,7 +25,8 @@ type Props = {
   hostDisplayName?: string;
   onLobby?: () => void;
   onQuitMultiplayer?: () => void;
-  onPlayInRoom?: (gameId: string) => void;
+  /** Host confirmed start (or set game when not everyone ready). */
+  onPlayInRoom?: (gameId: string, opts?: { start: boolean }) => void;
   onStats: () => void;
 };
 
@@ -28,7 +37,6 @@ export function Library({
   onJoinRoom,
   activeRoom,
   isHost,
-  hostDisplayName,
   onLobby,
   onQuitMultiplayer,
   onPlayInRoom,
@@ -36,22 +44,45 @@ export function Library({
 }: Props) {
   const [code, setCode] = useState('');
   const [picked, setPicked] = useState<string | null>(null);
+  const [confirmStart, setConfirmStart] = useState<string | null>(null);
   const [hostNote, setHostNote] = useState('');
+  const [room, setRoom] = useState<RoomData | null>(null);
+  const youId = getOrCreatePlayerId();
+
+  useEffect(() => {
+    void loadWordDict().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!activeRoom) {
+      setRoom(null);
+      return;
+    }
+    return subscribeRoom(activeRoom, setRoom);
+  }, [activeRoom]);
+
+  const tallies = room ? suggestionTally(room) : [];
+  const mySuggestion = room?.suggestions?.[youId];
 
   const pickGame = (gameId: string) => {
     setHostNote('');
     if (activeRoom && onPlayInRoom) {
       if (isHost) {
-        onPlayInRoom(gameId);
+        setConfirmStart(gameId);
       } else {
-        setHostNote(
-          `${hostDisplayName ?? 'The host'} picks the games. You're along for the ride!`,
-        );
+        suggestGame(activeRoom, youId, gameId)
+          .then(() => {
+            const g = getGame(gameId);
+            setHostNote(`Suggested ${g?.emoji ?? ''} ${g?.title ?? gameId} to the host.`);
+          })
+          .catch(() => setHostNote('Could not send suggestion.'));
       }
       return;
     }
     setPicked(gameId);
   };
+
+  const confirmGame = getGame(confirmStart || '');
 
   return (
     <div className="library">
@@ -81,28 +112,56 @@ export function Library({
       {activeRoom ? (
         <p className="muted" style={{ fontWeight: 800, marginBottom: 10 }}>
           {isHost
-            ? 'Tap a game to set it for the party (everyone must be ready to start).'
-            : `${hostDisplayName ?? 'Host'} is selecting games — your grid is view-only.`}
+            ? 'Tap a game — you’ll confirm before anything starts.'
+            : 'Tap a game to suggest it. Host picks when to start.'}
         </p>
       ) : null}
 
-      <div className={`game-grid ${activeRoom && !isHost ? 'game-grid-locked' : ''}`}>
-        {GAMES.map((g) => (
-          <button
-            key={g.id}
-            type="button"
-            className={`game-card ${activeRoom && !isHost ? 'game-card-locked' : ''}`}
-            style={{ borderColor: 'var(--ink)', boxShadow: `0 4px 0 var(--ink)` }}
-            onClick={() => pickGame(g.id)}
-            aria-disabled={!!(activeRoom && !isHost)}
-          >
-            <span className="emoji" aria-hidden>
-              {g.emoji}
-            </span>
-            <span className="title">{g.title}</span>
-            <span className="blurb">{g.blurb}</span>
-          </button>
-        ))}
+      {activeRoom && tallies.length ? (
+        <Panel style={{ marginBottom: 12 }}>
+          <p className="h3" style={{ marginBottom: 6 }}>
+            Party wants
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18, fontWeight: 700 }}>
+            {tallies.map((t) => {
+              const g = getGame(t.gameId);
+              return (
+                <li key={t.gameId}>
+                  {g?.emoji} {g?.title ?? t.gameId} — {t.count}{' '}
+                  {t.count === 1 ? 'vote' : 'votes'}
+                  <span className="muted"> ({t.names.join(', ')})</span>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      ) : null}
+
+      <div className="game-grid">
+        {GAMES.map((g) => {
+          const voted = mySuggestion === g.id;
+          return (
+            <button
+              key={g.id}
+              type="button"
+              className={`game-card ${voted ? 'game-card-voted' : ''}`}
+              style={{ borderColor: 'var(--ink)', boxShadow: `0 4px 0 var(--ink)` }}
+              onClick={() => pickGame(g.id)}
+            >
+              <span className="emoji" aria-hidden>
+                {g.emoji}
+              </span>
+              <span className="title">{g.title}</span>
+              <span className="blurb">
+                {activeRoom && !isHost
+                  ? voted
+                    ? 'Your suggestion ✓'
+                    : 'Tap to suggest'
+                  : g.blurb}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {!activeRoom ? (
@@ -182,6 +241,54 @@ export function Library({
                     Host multiplayer
                   </Button>
                   <Button variant="ghost" block onClick={() => setPicked(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </Panel>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {confirmStart && confirmGame && onPlayInRoom
+        ? createPortal(
+            <div
+              className="pick-modal"
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setConfirmStart(null);
+              }}
+            >
+              <Panel className="pick-sheet">
+                <p className="h3">
+                  {confirmGame.emoji} {confirmGame.title}
+                </p>
+                <p className="muted" style={{ marginTop: 4, marginBottom: 12 }}>
+                  Start this for the whole party? Everyone online who’s ready will jump in.
+                </p>
+                <div className="stack">
+                  <Button
+                    variant="primary"
+                    block
+                    onClick={() => {
+                      onPlayInRoom(confirmStart, { start: true });
+                      setConfirmStart(null);
+                    }}
+                  >
+                    Start match
+                  </Button>
+                  <Button
+                    variant="sky"
+                    block
+                    onClick={() => {
+                      onPlayInRoom(confirmStart, { start: false });
+                      setConfirmStart(null);
+                    }}
+                  >
+                    Just set game
+                  </Button>
+                  <Button variant="ghost" block onClick={() => setConfirmStart(null)}>
                     Cancel
                   </Button>
                 </div>

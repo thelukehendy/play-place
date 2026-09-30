@@ -23,6 +23,7 @@ import {
   setSharedGameState,
   startMatch,
   subscribeRoom,
+  suggestionTally,
   transferHost,
   updateScore,
   type RoomData,
@@ -42,7 +43,7 @@ type Props = {
   onBrowseGames: () => void;
   onQuitGame: () => void;
   onLeaveParty: () => void;
-  onHostPickGame: (gameId: string) => void;
+  onHostPickGame: (gameId: string, opts?: { start: boolean }) => void;
 };
 
 function useNow(active: boolean, intervalMs = 100) {
@@ -126,15 +127,22 @@ export function RoomSession({
   const me = room.players?.[player.id];
   const optedOutOfMatch = hasOptedOutOfMatch(room, player.id, now);
   const countdownActive = isCountdownActive(room, now);
+  const waitingForSharedGo =
+    room.status === 'countdown' &&
+    !countdownActive &&
+    !!me &&
+    getPresence(me) === 'playing';
   const matchLive = isMatchLive(room, now);
 
-  if (countdownActive && game) {
+  // Hold on countdown / GO until status flips to playing (shared start).
+  if ((countdownActive || waitingForSharedGo) && game) {
     return (
       <CountdownScreen
         room={room}
         gameTitle={`${game.emoji} ${game.title}`}
         endsAt={room.countdownEndsAt ?? 0}
         now={now}
+        waitingForGo={waitingForSharedGo}
       />
     );
   }
@@ -164,9 +172,24 @@ export function RoomSession({
           ) : null}
 
           {optedOutOfMatch ? (
-            <p style={{ fontWeight: 800, marginBottom: 10, color: 'var(--green-dark)' }}>
-              You left the match — hang in the lobby while others finish.
-            </p>
+            <>
+              <p style={{ fontWeight: 800, marginBottom: 10, color: 'var(--green-dark)' }}>
+                You left the match — hang in the lobby while others finish.
+              </p>
+              <Scoreboard
+                compact
+                title="Live match"
+                players={players
+                  .filter((p) => getPresence(p) === 'playing' || !!room.finished?.[p.id])
+                  .map((p) => ({ id: p.id, name: p.name }))}
+                scores={room.scores || {}}
+                youId={player.id}
+                finished={Object.entries(room.finished || {})
+                  .filter(([, v]) => v)
+                  .map(([id]) => id)}
+              />
+              <div style={{ height: 10 }} />
+            </>
           ) : null}
 
           <p className="h3" style={{ textAlign: 'center' }}>
@@ -249,24 +272,31 @@ export function RoomSession({
               {game?.emoji} {game?.title ?? room.gameId} — in progress
             </p>
           ) : isHost ? (
-            <select
-              className="field"
-              value={room.gameId}
-              onChange={(e) => {
-                if (!readyOk) {
-                  setError('Everyone online must ready up before starting.');
-                  return;
-                }
-                onHostPickGame(e.target.value);
-              }}
-              style={{ marginTop: 4 }}
-            >
-              {GAMES.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.emoji} {g.title}
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                className="field"
+                value={room.gameId}
+                onChange={(e) => onHostPickGame(e.target.value, { start: false })}
+                style={{ marginTop: 4 }}
+              >
+                {GAMES.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.emoji} {g.title}
+                  </option>
+                ))}
+              </select>
+              {suggestionTally(room).length ? (
+                <p className="muted" style={{ marginTop: 8, fontWeight: 700 }}>
+                  Votes:{' '}
+                  {suggestionTally(room)
+                    .map((t) => {
+                      const g = getGame(t.gameId);
+                      return `${g?.emoji ?? ''} ${g?.title ?? t.gameId} (${t.count})`;
+                    })
+                    .join(' · ')}
+                </p>
+              ) : null}
+            </>
           ) : (
             <p style={{ fontWeight: 800 }}>
               {game?.emoji} {game?.title ?? room.gameId}
@@ -291,6 +321,13 @@ export function RoomSession({
                 disabled={!readyOk}
                 onClick={() => {
                   if (!readyOk) return;
+                  if (
+                    !window.confirm(
+                      `Start ${game?.title ?? 'this game'} for the whole party?`,
+                    )
+                  ) {
+                    return;
+                  }
                   startMatch(room.code).catch((err) => setError(String(err)));
                 }}
               >
@@ -324,7 +361,7 @@ export function RoomSession({
           }
           rematch(room.code).catch((err) => setError(String(err)));
         }}
-        onPickGame={(gameId) => onHostPickGame(gameId)}
+        onPickGame={(gameId) => onHostPickGame(gameId, { start: false })}
         onBrowseGames={onBrowseGames}
         onLeaveParty={onLeaveParty}
         onError={setError}
@@ -372,8 +409,21 @@ export function RoomSession({
             {game.emoji} {game.title} is in progress
           </p>
           <p className="muted" style={{ marginBottom: 12 }}>
-            You joined mid-match — you&apos;ll play the next one. Hang out in the lobby or browse games.
+            You joined mid-match — you&apos;ll play the next one. Spectate scores below.
           </p>
+          <Scoreboard
+            compact
+            title="Live match"
+            players={players
+              .filter((p) => getPresence(p) === 'playing' || !!room.finished?.[p.id])
+              .map((p) => ({ id: p.id, name: p.name }))}
+            scores={room.scores || {}}
+            youId={player.id}
+            finished={Object.entries(room.finished || {})
+              .filter(([, v]) => v)
+              .map(([id]) => id)}
+          />
+          <div style={{ height: 12 }} />
           <ReadyPlayerList room={room} youId={player.id} now={now} onError={setError} />
           <div style={{ height: 12 }} />
           <Button variant="sky" block onClick={onBrowseGames}>
@@ -540,13 +590,15 @@ function CountdownScreen({
   gameTitle,
   endsAt,
   now,
+  waitingForGo = false,
 }: {
   room: RoomData;
   gameTitle: string;
   endsAt: number;
   now: number;
+  waitingForGo?: boolean;
 }) {
-  const left = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  const left = waitingForGo ? 0 : Math.max(0, Math.ceil((endsAt - now) / 1000));
   const last = useRef<number | null>(null);
   useEffect(() => {
     if (left !== last.current) {
@@ -582,7 +634,7 @@ function CountdownScreen({
           {left > 0 ? left : 'GO!'}
         </p>
         <p className="muted" style={{ fontWeight: 800 }}>
-          Everyone starts together
+          {waitingForGo ? 'Syncing phones…' : 'Everyone starts together'}
         </p>
       </Panel>
     </div>
@@ -686,14 +738,21 @@ function ResultsRoom({
         <div style={{ height: 14 }} />
         {isHost ? (
           <div className="stack">
-            <p className="muted">
-              You pick the next game
-              {!readyOk ? ' — wait for everyone online to ready up.' : '.'}
+            {readyOk ? (
+              <Button variant="primary" block onClick={onRematch}>
+                Play again — {game?.emoji} {game?.title}
+              </Button>
+            ) : (
+              <p className="muted">
+                Wait for everyone online to ready up, then Play again.
+              </p>
+            )}
+            <p className="muted" style={{ marginTop: 4 }}>
+              Or switch games:
             </p>
             <select
               className="field"
               defaultValue={room.gameId}
-              disabled={!readyOk}
               onChange={(e) => onPickGame(e.target.value)}
             >
               {GAMES.map((g) => (
@@ -702,7 +761,15 @@ function ResultsRoom({
                 </option>
               ))}
             </select>
-            <Button variant="gold" block disabled={!readyOk} onClick={onRematch}>
+            <Button
+              variant="gold"
+              block
+              disabled={!readyOk}
+              onClick={() => {
+                if (!readyOk) return;
+                onRematch();
+              }}
+            >
               Rematch
             </Button>
             <Button variant="ghost" block onClick={onBrowseGames}>
@@ -715,7 +782,9 @@ function ResultsRoom({
         ) : (
           <div className="stack">
             <p className="muted">
-              {hostName(room)} picks the next game. You stay in the party.
+              {readyOk
+                ? `Ready! Waiting for ${hostName(room)} to tap Play again.`
+                : `${hostName(room)} picks the next game. Ready up when you are.`}
             </p>
             <Button variant="ghost" block onClick={onBrowseGames}>
               Browse games
@@ -814,6 +883,12 @@ function RoomPlay({
   };
 
   const livePlayers = players.slice(0, 4);
+  const turnState = room.gameState as { turn?: number } | null;
+  const turnIdx = typeof turnState?.turn === 'number' ? turnState.turn : -1;
+  const turnPlayer = turnIdx >= 0 ? livePlayers[turnIdx] : null;
+  const myTurn = !!turnPlayer && turnPlayer.id === player.id;
+  const canNudgeTurn =
+    game.modes.includes('turn') && !!turnPlayer && !myTurn && !room.finished?.[player.id];
 
   return (
     <div className="stack room-play" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
@@ -838,6 +913,20 @@ function RoomPlay({
           youId={player.id}
           finished={finishedPlayers}
         />
+        {canNudgeTurn && turnPlayer ? (
+          <Button
+            variant="sky"
+            block
+            style={{ marginBottom: 8 }}
+            onClick={() => {
+              nudgePlayer(room.code, turnPlayer.id, player, 'Your turn!').catch((err) =>
+                onError(String(err)),
+              );
+            }}
+          >
+            Nudge {turnPlayer.name} — your turn!
+          </Button>
+        ) : null}
         <p className="muted" style={{ fontSize: '0.8rem', margin: '0 0 8px', textAlign: 'center' }}>
           Quit game keeps you in the party lobby
         </p>

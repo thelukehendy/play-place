@@ -29,11 +29,13 @@ const NUDGE_TOAST_MS = 2500;
 type ChatCtx = {
   openChat: () => void;
   enabled: boolean;
+  unread: number;
 };
 
 const PartyChatContext = createContext<ChatCtx>({
   openChat: () => undefined,
   enabled: false,
+  unread: 0,
 });
 
 export function usePartyChat() {
@@ -42,7 +44,7 @@ export function usePartyChat() {
 
 /** In-flow Chat control for headers — never fixed/overlapping. */
 export function ChatButton() {
-  const { openChat, enabled } = usePartyChat();
+  const { openChat, enabled, unread } = usePartyChat();
   if (!enabled) return null;
   return (
     <Button
@@ -52,9 +54,10 @@ export function ChatButton() {
         sfxTap();
         openChat();
       }}
-      aria-label="Open party chat"
+      aria-label={unread ? `Open party chat, ${unread} new` : 'Open party chat'}
     >
       Chat
+      {unread > 0 ? <span className="chat-unread-badge">{unread > 9 ? '9+' : unread}</span> : null}
     </Button>
   );
 }
@@ -109,6 +112,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
   const [room, setRoom] = useState<RoomData | null>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const [unread, setUnread] = useState(0);
   const [toasts, setToasts] = useState<(ChatMessage & { id: string })[]>([]);
   /** Visible viewport frame — updated every animation frame while chat is open. */
   const [frame, setFrame] = useState<Frame>(() =>
@@ -135,6 +139,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
       setRoom(null);
       setOpen(false);
       setToasts([]);
+      setUnread(0);
       bootstrapped.current = false;
       noticesBootstrapped.current = false;
       seen.current = new Set();
@@ -146,6 +151,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     seen.current = new Set();
     seenNotices.current = new Set();
     setToasts([]);
+    setUnread(0);
     setRoom(null);
     const unsub = subscribeRoom(code, setRoom);
     return () => unsub();
@@ -165,13 +171,14 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     fresh.forEach((m) => seen.current.add(m.id));
     const incoming = fresh.filter((m) => m.fromId !== player.id);
     if (!incoming.length) return;
+    if (!open) setUnread((u) => Math.min(99, u + incoming.length));
     setToasts((t) => [...t, ...incoming].slice(-4));
     incoming.forEach((m) => {
       window.setTimeout(() => {
         setToasts((t) => t.filter((x) => x.id !== m.id));
       }, TOAST_MS);
     });
-  }, [messages, player.id, code, room]);
+  }, [messages, player.id, code, room, open]);
 
   useEffect(() => {
     if (!code || !room) return;
@@ -270,6 +277,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
 
   const myNudgeAt = room?.nudges?.[player.id]?.at;
   const myNudgeFrom = room?.nudges?.[player.id]?.fromName;
+  const myNudgeText = room?.nudges?.[player.id]?.text;
   useEffect(() => {
     if (!code || !myNudgeAt || !myNudgeFrom) return;
     const id = `nudge-${myNudgeAt}`;
@@ -282,7 +290,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
           id,
           fromId: 'nudge',
           fromName: myNudgeFrom,
-          text: 'Ready to go?',
+          text: myNudgeText || 'Ready to go?',
           at: myNudgeAt,
         },
       ].slice(-4),
@@ -290,12 +298,15 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     window.setTimeout(() => {
       setToasts((t) => t.filter((x) => x.id !== id));
     }, NUDGE_TOAST_MS);
-  }, [myNudgeAt, myNudgeFrom, code]);
+  }, [myNudgeAt, myNudgeFrom, myNudgeText, code]);
 
-  const openChat = useCallback(() => setOpen(true), []);
+  const openChat = useCallback(() => {
+    setOpen(true);
+    setUnread(0);
+  }, []);
   const ctx = useMemo(
-    () => ({ openChat, enabled: !!code }),
-    [openChat, code],
+    () => ({ openChat, enabled: !!code, unread }),
+    [openChat, code, unread],
   );
 
   const send = async () => {
