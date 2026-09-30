@@ -12,10 +12,12 @@ import { createPortal } from 'react-dom';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import {
   chatList,
+  noticeList,
   sendChatMessage,
   subscribeRoom,
   type ChatMessage,
   type RoomData,
+  type RoomNotice,
 } from '../multiplayer/rooms';
 import { Button } from '../ui/Button';
 import { sfxTap } from '../lib/sfx';
@@ -117,7 +119,9 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
   /** Sheet height captured once on open from the pre-keyboard viewport. */
   const sheetPx = useRef(280);
   const seen = useRef<Set<string>>(new Set());
+  const seenNotices = useRef<Set<string>>(new Set());
   const bootstrapped = useRef(false);
+  const noticesBootstrapped = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollLockY = useRef(0);
@@ -132,11 +136,15 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
       setOpen(false);
       setToasts([]);
       bootstrapped.current = false;
+      noticesBootstrapped.current = false;
       seen.current = new Set();
+      seenNotices.current = new Set();
       return;
     }
     bootstrapped.current = false;
+    noticesBootstrapped.current = false;
     seen.current = new Set();
+    seenNotices.current = new Set();
     setToasts([]);
     setRoom(null);
     const unsub = subscribeRoom(code, setRoom);
@@ -144,6 +152,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
   }, [code]);
 
   const messages = room && code ? chatList(room) : [];
+  const notices = room && code ? noticeList(room) : [];
 
   useEffect(() => {
     if (!code || !room) return;
@@ -163,6 +172,33 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
       }, TOAST_MS);
     });
   }, [messages, player.id, code, room]);
+
+  useEffect(() => {
+    if (!code || !room) return;
+    if (!noticesBootstrapped.current) {
+      notices.forEach((n) => seenNotices.current.add(n.id));
+      noticesBootstrapped.current = true;
+      return;
+    }
+    const fresh = notices.filter((n) => !seenNotices.current.has(n.id));
+    fresh.forEach((n) => seenNotices.current.add(n.id));
+    // Skip notices about yourself (you already know you left / were made host locally).
+    const incoming = fresh.filter((n) => n.playerId !== player.id);
+    if (!incoming.length) return;
+    const asToasts = incoming.map((n: RoomNotice & { id: string }) => ({
+      id: n.id,
+      fromId: 'system',
+      fromName: 'Party',
+      text: n.text,
+      at: n.at,
+    }));
+    setToasts((t) => [...t, ...asToasts].slice(-4));
+    asToasts.forEach((m) => {
+      window.setTimeout(() => {
+        setToasts((t) => t.filter((x) => x.id !== m.id));
+      }, TOAST_MS);
+    });
+  }, [notices, player.id, code, room]);
 
   // While chat is open: lock document scroll and continuously pin the portal to
   // the *visual* viewport so iOS keyboard pan cannot slide anything vertically.

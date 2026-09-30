@@ -8,7 +8,7 @@
         ".write": true,
         ".validate": "newData.hasChildren(['code', 'hostId', 'gameId', 'status', 'seed', 'createdAt'])",
         "status": {
-          ".validate": "newData.isString() && (newData.val() === 'lobby' || newData.val() === 'playing' || newData.val() === 'results')"
+          ".validate": "newData.isString() && (newData.val() === 'lobby' || newData.val() === 'countdown' || newData.val() === 'playing' || newData.val() === 'results')"
         }
       }
     }

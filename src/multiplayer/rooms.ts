@@ -22,6 +22,8 @@ export type PlayerPresence = 'lobby' | 'playing';
 export type RoomPlayer = PlayerInfo & {
   connected: boolean;
   joinedAt: number;
+  /** Heartbeat timestamp — used to detect frozen tabs. */
+  lastSeenAt?: number;
   /** Defaults to lobby for older rooms missing the field. */
   presence?: PlayerPresence;
   ready?: boolean;
@@ -44,6 +46,8 @@ export type RoomData = {
   countdownEndsAt?: number | null;
   chat?: Record<string, ChatMessage>;
   nudges?: Record<string, Nudge>;
+  /** Soft notices (join/leave/host) for toasts — pruned. */
+  notices?: Record<string, RoomNotice>;
 };
 
 export type ChatMessage = {
@@ -59,9 +63,29 @@ export type Nudge = {
   at: number;
 };
 
-const LOCAL_ROOMS_KEY = 'playplace.localRooms';
+export type RoomNotice = {
+  kind: 'join' | 'leave' | 'kick' | 'host' | 'forfeit' | 'reconnect';
+  text: string;
+  at: number;
+  /** Optional player the notice is about */
+  playerId?: string;
+};
 
-/** In-memory + localStorage fallback when Firebase isn't configured (solo-friendly demo / local 2-device via same browser profile won't cross devices). */
+const LOCAL_ROOMS_KEY = 'playplace.localRooms';
+export const MAX_PLAYERS = 4;
+
+/** Consider a player away if disconnected or heartbeat is this stale. */
+export const AWAY_MS = 18_000;
+/** Promote a new host when the current host has been away this long. */
+export const HOST_AWAY_MS = 10_000;
+/** Auto-forfeit a match participant after being away this long. */
+export const MATCH_FORFEIT_MS = 22_000;
+/** Auto-prune ghost players (fully leave) after being away this long. */
+export const PRUNE_AWAY_MS = 90_000;
+export const HEARTBEAT_MS = 4_000;
+export const NUDGE_REMOVE_MS = 6_000;
+
+/** In-memory + localStorage fallback when Firebase isn't configured. */
 type LocalStore = Record<string, RoomData>;
 
 function readLocal(): LocalStore {
@@ -77,6 +101,64 @@ function writeLocal(store: LocalStore) {
   window.dispatchEvent(new CustomEvent('playplace-local-rooms'));
 }
 
+function nowMs() {
+  return Date.now();
+}
+
+function playerPayload(
+  player: PlayerInfo,
+  extras: Partial<RoomPlayer> = {},
+): RoomPlayer {
+  const t = nowMs();
+  return {
+    ...player,
+    connected: true,
+    joinedAt: t,
+    lastSeenAt: t,
+    presence: 'lobby',
+    ready: false,
+    ...extras,
+  };
+}
+
+async function armDisconnect(code: string, playerId: string) {
+  if (!isFirebaseConfigured()) return;
+  const { db } = getFirebase();
+  const playerRef = ref(db, `rooms/${code}/players/${playerId}`);
+  try {
+    await onDisconnect(playerRef).cancel();
+  } catch {
+    /* no prior handler */
+  }
+  await onDisconnect(playerRef).update({
+    connected: false,
+    lastSeenAt: nowMs(),
+  });
+}
+
+async function pushNotice(code: string, notice: Omit<RoomNotice, 'at'> & { at?: number }) {
+  const normalized = code.trim().toUpperCase();
+  const entry: RoomNotice = { ...notice, at: notice.at ?? nowMs() };
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    const id = `n_${entry.at}_${Math.random().toString(36).slice(2, 6)}`;
+    room.notices = { ...(room.notices || {}), [id]: entry };
+    const ids = Object.keys(room.notices).sort(
+      (a, b) => (room.notices![a].at || 0) - (room.notices![b].at || 0),
+    );
+    if (ids.length > 20) {
+      for (const old of ids.slice(0, ids.length - 20)) delete room.notices[old];
+    }
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  const noticeRef = push(ref(db, `rooms/${normalized}/notices`));
+  await set(noticeRef, entry);
+}
+
 export async function createRoom(gameId: string, host: PlayerInfo): Promise<RoomData> {
   const code = makeCode(5);
   const room: RoomData = {
@@ -85,15 +167,9 @@ export async function createRoom(gameId: string, host: PlayerInfo): Promise<Room
     gameId,
     status: 'lobby',
     seed: randomSeed(),
-    createdAt: Date.now(),
+    createdAt: nowMs(),
     players: {
-      [host.id]: {
-        ...host,
-        connected: true,
-        joinedAt: Date.now(),
-        presence: 'lobby',
-        ready: false,
-      },
+      [host.id]: playerPayload(host, { presence: 'lobby', ready: false }),
     },
     scores: {},
     finished: {},
@@ -113,8 +189,7 @@ export async function createRoom(gameId: string, host: PlayerInfo): Promise<Room
   const { db } = getFirebase();
   const roomRef = ref(db, `rooms/${code}`);
   await set(roomRef, room);
-  const playerRef = ref(db, `rooms/${code}/players/${host.id}`);
-  await onDisconnect(playerRef).update({ connected: false });
+  await armDisconnect(code, host.id);
   return room;
 }
 
@@ -125,17 +200,36 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
     const store = readLocal();
     const room = store[normalized];
     if (!room) throw new Error('Room not found. Check the code.');
-    if (!room.players[player.id] && Object.keys(room.players).length >= 4) {
-      throw new Error('Room is full (max 4 players).');
+    const existing = room.players[player.id];
+    if (!existing && Object.keys(room.players).length >= MAX_PLAYERS) {
+      throw new Error(`Room is full (max ${MAX_PLAYERS} players).`);
     }
-    room.players[player.id] = {
-      ...player,
-      connected: true,
-      joinedAt: Date.now(),
-      presence: 'lobby',
+    const midMatch = isMatchLive(room);
+    const reconnecting =
+      !!existing &&
+      getPresence(existing) === 'playing' &&
+      midMatch &&
+      !room.finished?.[player.id];
+    const wasAway = existing && !isPlayerOnline(existing, nowMs());
+    room.players[player.id] = playerPayload(player, {
+      joinedAt: existing?.joinedAt ?? nowMs(),
+      presence: reconnecting ? 'playing' : 'lobby',
       ready: false,
-    };
+    });
     writeLocal(store);
+    if (!existing) {
+      void pushNotice(normalized, {
+        kind: 'join',
+        text: `${player.name} joined`,
+        playerId: player.id,
+      });
+    } else if (wasAway || reconnecting) {
+      void pushNotice(normalized, {
+        kind: 'reconnect',
+        text: `${player.name} is back`,
+        playerId: player.id,
+      });
+    }
     return room;
   }
 
@@ -145,18 +239,40 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
   const snap = await get(roomRef);
   if (!snap.exists()) throw new Error('Room not found. Check the code.');
   const room = snap.val() as RoomData;
-  if (!room.players?.[player.id] && Object.keys(room.players || {}).length >= 4) {
-    throw new Error('Room is full (max 4 players).');
+  const existing = room.players?.[player.id];
+  if (!existing && Object.keys(room.players || {}).length >= MAX_PLAYERS) {
+    throw new Error(`Room is full (max ${MAX_PLAYERS} players).`);
   }
+  const midMatch = isMatchLive(room);
+  const reconnecting =
+    !!existing &&
+    getPresence(existing) === 'playing' &&
+    midMatch &&
+    !room.finished?.[player.id];
+  const wasAway = existing && !isPlayerOnline(existing, nowMs());
   const playerRef = ref(db, `rooms/${normalized}/players/${player.id}`);
-  await set(playerRef, {
-    ...player,
-    connected: true,
-    joinedAt: Date.now(),
-    presence: 'lobby',
-    ready: false,
-  });
-  await onDisconnect(playerRef).update({ connected: false });
+  await set(
+    playerRef,
+    playerPayload(player, {
+      joinedAt: existing?.joinedAt ?? nowMs(),
+      presence: reconnecting ? 'playing' : 'lobby',
+      ready: false,
+    }),
+  );
+  await armDisconnect(normalized, player.id);
+  if (!existing) {
+    await pushNotice(normalized, {
+      kind: 'join',
+      text: `${player.name} joined`,
+      playerId: player.id,
+    });
+  } else if (wasAway || reconnecting) {
+    await pushNotice(normalized, {
+      kind: 'reconnect',
+      text: `${player.name} is back`,
+      playerId: player.id,
+    });
+  }
   return { ...room, code: normalized };
 }
 
@@ -202,7 +318,56 @@ export function getPresence(player: RoomPlayer): PlayerPresence {
   return player.presence === 'playing' ? 'playing' : 'lobby';
 }
 
-/** Players still in the live race (opted into the match). Ignores flaky `connected`. */
+export function isPlayerOnline(player: RoomPlayer, now = nowMs()): boolean {
+  if (!player.connected) return false;
+  const seen = player.lastSeenAt ?? player.joinedAt ?? 0;
+  if (seen && now - seen > AWAY_MS) return false;
+  return true;
+}
+
+export function playerAwayMs(player: RoomPlayer, now = nowMs()): number {
+  if (!player.connected) {
+    const seen = player.lastSeenAt ?? player.joinedAt ?? now;
+    return Math.max(0, now - seen);
+  }
+  const seen = player.lastSeenAt ?? player.joinedAt ?? now;
+  return Math.max(0, now - seen);
+}
+
+/** Countdown finished and match is (or should be) live. */
+export function isMatchLive(room: RoomData, now = nowMs()): boolean {
+  if (room.status === 'playing') return true;
+  if (room.status === 'countdown') {
+    const ends = room.countdownEndsAt ?? 0;
+    return ends > 0 && now >= ends;
+  }
+  return false;
+}
+
+export function isCountdownActive(room: RoomData, now = nowMs()): boolean {
+  if (room.status !== 'countdown') return false;
+  const ends = room.countdownEndsAt ?? 0;
+  return ends > 0 && now < ends;
+}
+
+/** Player is currently racing/playing in the live match. */
+export function isInLiveMatch(room: RoomData, playerId: string, now = nowMs()): boolean {
+  const p = room.players?.[playerId];
+  if (!p) return false;
+  if (!isMatchLive(room, now) && !isCountdownActive(room, now)) return false;
+  return getPresence(p) === 'playing';
+}
+
+/** Opted out / spectating while others finish the match. */
+export function hasOptedOutOfMatch(room: RoomData, playerId: string, now = nowMs()): boolean {
+  const p = room.players?.[playerId];
+  if (!p) return false;
+  if (!(room.status === 'playing' || room.status === 'countdown')) return false;
+  if (isCountdownActive(room, now)) return false;
+  return getPresence(p) === 'lobby';
+}
+
+/** Players still in the live race (opted into the match). */
 export function playersInMatch(room: RoomData): RoomPlayer[] {
   return Object.values(room.players || {}).filter((p) => getPresence(p) === 'playing');
 }
@@ -219,17 +384,29 @@ export function playersList(room: RoomData): RoomPlayer[] {
   return Object.values(room.players || {}).sort((a, b) => a.joinedAt - b.joinedAt);
 }
 
-export function connectedPlayers(room: RoomData): RoomPlayer[] {
-  return playersList(room).filter((p) => p.connected);
+export function onlinePlayers(room: RoomData, now = nowMs()): RoomPlayer[] {
+  return playersList(room).filter((p) => isPlayerOnline(p, now));
 }
 
-export function allConnectedReady(room: RoomData): boolean {
-  const connected = connectedPlayers(room);
-  return connected.length > 0 && connected.every((p) => !!p.ready);
+/** @deprecated use onlinePlayers — kept for call sites that meant "can ready / start". */
+export function connectedPlayers(room: RoomData): RoomPlayer[] {
+  return onlinePlayers(room);
+}
+
+export function allConnectedReady(room: RoomData, now = nowMs()): boolean {
+  const online = onlinePlayers(room, now);
+  return online.length > 0 && online.every((p) => !!p.ready);
 }
 
 export function hostName(room: RoomData): string {
   return room.players?.[room.hostId]?.name ?? 'Host';
+}
+
+export function pickNextHost(room: RoomData, excludeId?: string, now = nowMs()): RoomPlayer | null {
+  const online = onlinePlayers(room, now).filter((p) => p.id !== excludeId);
+  if (online.length) return online[0];
+  const any = playersList(room).filter((p) => p.id !== excludeId);
+  return any[0] ?? null;
 }
 
 export async function setPlayerReady(code: string, playerId: string, ready: boolean) {
@@ -239,12 +416,18 @@ export async function setPlayerReady(code: string, playerId: string, ready: bool
     const room = store[normalized];
     if (!room?.players[playerId]) return;
     room.players[playerId].ready = ready;
+    room.players[playerId].lastSeenAt = nowMs();
+    room.players[playerId].connected = true;
     if (ready && room.nudges?.[playerId]) delete room.nudges[playerId];
     writeLocal(store);
     return;
   }
   const { db } = getFirebase();
-  await set(ref(db, `rooms/${normalized}/players/${playerId}/ready`), ready);
+  await update(ref(db, `rooms/${normalized}/players/${playerId}`), {
+    ready,
+    lastSeenAt: nowMs(),
+    connected: true,
+  });
   if (ready) {
     await remove(ref(db, `rooms/${normalized}/nudges/${playerId}`));
   }
@@ -261,11 +444,54 @@ export async function setPlayerPresence(
     const room = store[normalized];
     if (!room?.players[playerId]) return;
     room.players[playerId].presence = presence;
+    room.players[playerId].lastSeenAt = nowMs();
     writeLocal(store);
     return;
   }
   const { db } = getFirebase();
-  await set(ref(db, `rooms/${normalized}/players/${playerId}/presence`), presence);
+  await update(ref(db, `rooms/${normalized}/players/${playerId}`), {
+    presence,
+    lastSeenAt: nowMs(),
+  });
+}
+
+export async function heartbeat(code: string, playerId: string) {
+  const normalized = code.trim().toUpperCase();
+  const t = nowMs();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room?.players[playerId]) return;
+    room.players[playerId].connected = true;
+    room.players[playerId].lastSeenAt = t;
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await update(ref(db, `rooms/${normalized}/players/${playerId}`), {
+    connected: true,
+    lastSeenAt: t,
+  });
+}
+
+/** Mark local disconnect promptly (demo mode / tab hide). */
+export async function markDisconnected(code: string, playerId: string) {
+  const normalized = code.trim().toUpperCase();
+  const t = nowMs();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room?.players[playerId]) return;
+    room.players[playerId].connected = false;
+    room.players[playerId].lastSeenAt = t;
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await update(ref(db, `rooms/${normalized}/players/${playerId}`), {
+    connected: false,
+    lastSeenAt: t,
+  });
 }
 
 export async function setRoomGame(code: string, gameId: string) {
@@ -306,14 +532,15 @@ export async function setRoomGame(code: string, gameId: string) {
   await update(ref(db, `rooms/${normalized}`), updates);
 }
 
-/** Shared 3-2-1 then match — all devices use countdownEndsAt. */
+/** Shared 3-2-1 then match — only online players enter the race. */
 async function beginCountdown(
   code: string,
   opts: { gameId?: string; seed?: number } = {},
 ) {
   const normalized = code.trim().toUpperCase();
   const nextSeed = opts.seed ?? randomSeed();
-  const countdownEndsAt = Date.now() + 3000;
+  const countdownEndsAt = nowMs() + 3000;
+  const t = nowMs();
 
   if (!isFirebaseConfigured()) {
     const store = readLocal();
@@ -328,8 +555,12 @@ async function beginCountdown(
     room.gameState = null;
     room.winnerId = null;
     for (const p of Object.values(room.players)) {
-      p.presence = 'playing';
+      const online = isPlayerOnline(p, t);
+      p.presence = online ? 'playing' : 'lobby';
       p.ready = false;
+      if (!online) {
+        // Away players sit out this match.
+      }
     }
     writeLocal(store);
     return;
@@ -348,15 +579,15 @@ async function beginCountdown(
     winnerId: null,
   };
   if (opts.gameId) updates.gameId = opts.gameId;
-  for (const id of Object.keys(players)) {
-    updates[`players/${id}/presence`] = 'playing';
+  for (const [id, p] of Object.entries(players)) {
+    const online = isPlayerOnline(p, t);
+    updates[`players/${id}/presence`] = online ? 'playing' : 'lobby';
     updates[`players/${id}/ready`] = false;
   }
   await update(ref(db, `rooms/${normalized}`), updates);
 }
 
 export async function startMatch(code: string, _seed?: number) {
-  // Always mint a fresh seed — never reuse a caller-supplied board.
   await beginCountdown(code, { seed: randomSeed() });
 }
 
@@ -369,38 +600,211 @@ export async function rematch(code: string) {
   await beginCountdown(code, { seed: randomSeed() });
 }
 
-/** Promote next connected player if the host fully leaves multiplayer. */
-export async function leaveRoom(code: string, playerId: string) {
+export async function promoteCountdownToPlaying(code: string) {
+  const normalized = code.trim().toUpperCase();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room || room.status !== 'countdown') return;
+    const ends = room.countdownEndsAt ?? 0;
+    if (ends && nowMs() < ends) return;
+    room.status = 'playing';
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  const snap = await get(ref(db, `rooms/${normalized}`));
+  if (!snap.exists()) return;
+  const room = snap.val() as RoomData;
+  if (room.status !== 'countdown') return;
+  const ends = room.countdownEndsAt ?? 0;
+  if (ends && nowMs() < ends) return;
+  await update(ref(db, `rooms/${normalized}`), { status: 'playing' });
+}
+
+export async function transferHost(code: string, newHostId: string) {
+  const normalized = code.trim().toUpperCase();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room?.players[newHostId]) return;
+    if (room.hostId === newHostId) return;
+    room.hostId = newHostId;
+    writeLocal(store);
+    void pushNotice(normalized, {
+      kind: 'host',
+      text: `${room.players[newHostId].name} is now host`,
+      playerId: newHostId,
+    });
+    return;
+  }
+  const { db } = getFirebase();
+  const snap = await get(ref(db, `rooms/${normalized}/players/${newHostId}`));
+  if (!snap.exists()) return;
+  const name = (snap.val() as RoomPlayer).name;
+  await update(ref(db, `rooms/${normalized}`), { hostId: newHostId });
+  await pushNotice(normalized, {
+    kind: 'host',
+    text: `${name} is now host`,
+    playerId: newHostId,
+  });
+}
+
+/** Promote next online player if the host fully leaves multiplayer. */
+export async function leaveRoom(code: string, playerId: string, opts?: { kicked?: boolean }) {
   const normalized = code.trim().toUpperCase();
   if (!isFirebaseConfigured()) {
     const store = readLocal();
     const room = store[normalized];
     if (!room) return;
+    const leaving = room.players[playerId];
+    const name = leaving?.name ?? 'Someone';
     const wasHost = room.hostId === playerId;
     delete room.players[playerId];
+    if (room.nudges?.[playerId]) delete room.nudges[playerId];
+    if (room.finished) delete room.finished[playerId];
+    if (room.scores) delete room.scores[playerId];
     const remaining = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
     if (remaining.length === 0) {
       delete store[normalized];
-    } else if (wasHost) {
-      room.hostId = remaining[0].id;
+      writeLocal(store);
+      return;
     }
+    if (wasHost) {
+      const next = pickNextHost(room, playerId);
+      if (next) room.hostId = next.id;
+    }
+    // If leavers was mid-match, re-check match end.
+    const patch = matchAftermathAfterLoss(room, playerId);
+    if (patch) Object.assign(room, patch);
     writeLocal(store);
+    void pushNotice(normalized, {
+      kind: opts?.kicked ? 'kick' : 'leave',
+      text: opts?.kicked ? `${name} was removed` : `${name} left`,
+      playerId,
+    });
+    if (wasHost && room.hostId !== playerId) {
+      void pushNotice(normalized, {
+        kind: 'host',
+        text: `${room.players[room.hostId]?.name ?? 'Someone'} is now host`,
+        playerId: room.hostId,
+      });
+    }
     return;
   }
+
   const { db } = getFirebase();
   const roomSnap = await get(ref(db, `rooms/${normalized}`));
   if (!roomSnap.exists()) return;
   const room = roomSnap.val() as RoomData;
+  const leaving = room.players?.[playerId];
+  const name = leaving?.name ?? 'Someone';
   const wasHost = room.hostId === playerId;
-  await remove(ref(db, `rooms/${normalized}/players/${playerId}`));
-  const remaining = Object.values(room.players || {})
-    .filter((p) => p.id !== playerId)
-    .sort((a, b) => a.joinedAt - b.joinedAt);
-  if (remaining.length === 0) {
-    await remove(ref(db, `rooms/${normalized}`));
-  } else if (wasHost) {
-    await update(ref(db, `rooms/${normalized}`), { hostId: remaining[0].id });
+
+  try {
+    await onDisconnect(ref(db, `rooms/${normalized}/players/${playerId}`)).cancel();
+  } catch {
+    /* ignore */
   }
+  await remove(ref(db, `rooms/${normalized}/players/${playerId}`));
+  await remove(ref(db, `rooms/${normalized}/nudges/${playerId}`));
+  await remove(ref(db, `rooms/${normalized}/finished/${playerId}`));
+  await remove(ref(db, `rooms/${normalized}/scores/${playerId}`));
+
+  const remainingIds = Object.keys(room.players || {}).filter((id) => id !== playerId);
+  if (remainingIds.length === 0) {
+    await remove(ref(db, `rooms/${normalized}`));
+    return;
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (wasHost) {
+    const next = pickNextHost(
+      {
+        ...room,
+        players: Object.fromEntries(
+          remainingIds.map((id) => [id, room.players[id]]),
+        ),
+      },
+      playerId,
+    );
+    if (next) updates.hostId = next.id;
+  }
+
+  // Snapshot with player removed for aftermath
+  const after: RoomData = {
+    ...room,
+    players: Object.fromEntries(remainingIds.map((id) => [id, room.players[id]])),
+    hostId: (updates.hostId as string) || room.hostId,
+  };
+  const patch = matchAftermathAfterLoss(after, playerId);
+  if (patch) Object.assign(updates, patch);
+
+  if (Object.keys(updates).length) {
+    await update(ref(db, `rooms/${normalized}`), updates);
+  }
+
+  await pushNotice(normalized, {
+    kind: opts?.kicked ? 'kick' : 'leave',
+    text: opts?.kicked ? `${name} was removed` : `${name} left`,
+    playerId,
+  });
+  if (wasHost && updates.hostId) {
+    const hostPlayer = room.players[updates.hostId as string];
+    await pushNotice(normalized, {
+      kind: 'host',
+      text: `${hostPlayer?.name ?? 'Someone'} is now host`,
+      playerId: updates.hostId as string,
+    });
+  }
+}
+
+function matchAftermathAfterLoss(room: RoomData, lostPlayerId: string): Partial<RoomData> | null {
+  if (!(room.status === 'playing' || room.status === 'countdown')) return null;
+  if (isCountdownActive(room)) {
+    // lost already removed from players when called from leaveRoom
+    const still = playersInMatch(room);
+    if (still.length === 0) {
+      return {
+        status: 'lobby',
+        scores: {},
+        finished: {},
+        gameState: null,
+        winnerId: null,
+        countdownEndsAt: null,
+      };
+    }
+    return null;
+  }
+
+  const stillPlaying = playersInMatch(room);
+  const game = getGame(room.gameId);
+  if (stillPlaying.length === 0) {
+    return {
+      status: 'lobby',
+      scores: {},
+      finished: {},
+      gameState: null,
+      winnerId: null,
+      countdownEndsAt: null,
+    };
+  }
+  if (game?.modes.includes('turn') && stillPlaying.length < 2) {
+    return {
+      status: 'lobby',
+      scores: {},
+      finished: {},
+      gameState: null,
+      winnerId: null,
+      countdownEndsAt: null,
+    };
+  }
+  const finished = { ...(room.finished || {}) };
+  delete finished[lostPlayerId];
+  if (stillPlaying.every((p) => finished[p.id])) {
+    return { status: 'results', finished };
+  }
+  return null;
 }
 
 /** Leave the current mini-game but stay in the party. */
@@ -413,8 +817,6 @@ export async function quitMatch(code: string, playerId: string) {
     const stillPlaying = Object.values(room.players || {}).filter(
       (p) => p.id !== playerId && getPresence(p) === 'playing',
     );
-    // Quitting player already set to lobby in Firebase/local before this runs —
-    // also treat them as not playing when reading a stale snapshot.
     const game = getGame(room.gameId);
     if (stillPlaying.length === 0) {
       return {
@@ -423,6 +825,7 @@ export async function quitMatch(code: string, playerId: string) {
         finished: {},
         gameState: null,
         winnerId: null,
+        countdownEndsAt: null,
       };
     }
     if (game?.modes.includes('turn') && stillPlaying.length < 2) {
@@ -432,6 +835,7 @@ export async function quitMatch(code: string, playerId: string) {
         finished: {},
         gameState: null,
         winnerId: null,
+        countdownEndsAt: null,
       };
     }
     if (stillPlaying.every((p) => finished[p.id])) {
@@ -456,11 +860,119 @@ export async function quitMatch(code: string, playerId: string) {
   if (!roomSnap.exists()) return;
   const room = roomSnap.val() as RoomData;
   if (room.players?.[playerId]) {
-    // ensure presence is lobby on the snapshot used for decisions
     room.players[playerId] = { ...room.players[playerId], presence: 'lobby' };
   }
   const patch = applyQuit(room);
   if (patch) await update(ref(db, `rooms/${normalized}`), patch);
+}
+
+/** Mark a stuck/away racer as finished and out of the match. */
+export async function forfeitMatchPlayer(code: string, playerId: string) {
+  const normalized = code.trim().toUpperCase();
+  const nameHint = async () => {
+    /* filled below */
+  };
+  void nameHint;
+
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room?.players[playerId]) return;
+    if (getPresence(room.players[playerId]) !== 'playing') return;
+    const name = room.players[playerId].name;
+    room.players[playerId].presence = 'lobby';
+    room.finished = { ...(room.finished || {}), [playerId]: true };
+    room.scores = {
+      ...(room.scores || {}),
+      [playerId]: room.scores?.[playerId] ?? {
+        primary: 0,
+        label: 'Away',
+        progress: 1,
+      },
+    };
+    const patch = (() => {
+      const stillPlaying = Object.values(room.players).filter(
+        (p) => p.id !== playerId && getPresence(p) === 'playing',
+      );
+      const game = getGame(room.gameId);
+      if (stillPlaying.length === 0) {
+        return {
+          status: 'lobby' as const,
+          scores: {},
+          finished: {},
+          gameState: null,
+          winnerId: null,
+          countdownEndsAt: null,
+        };
+      }
+      if (game?.modes.includes('turn') && stillPlaying.length < 2) {
+        return {
+          status: 'lobby' as const,
+          scores: {},
+          finished: {},
+          gameState: null,
+          winnerId: null,
+          countdownEndsAt: null,
+        };
+      }
+      if (stillPlaying.every((p) => room.finished[p.id])) {
+        return { status: 'results' as const };
+      }
+      return null;
+    })();
+    if (patch) Object.assign(room, patch);
+    writeLocal(store);
+    void pushNotice(normalized, {
+      kind: 'forfeit',
+      text: `${name} left the match (away)`,
+      playerId,
+    });
+    return;
+  }
+
+  const { db } = getFirebase();
+  const roomSnap = await get(ref(db, `rooms/${normalized}`));
+  if (!roomSnap.exists()) return;
+  const room = roomSnap.val() as RoomData;
+  const target = room.players?.[playerId];
+  if (!target || getPresence(target) !== 'playing') return;
+
+  const finished = { ...(room.finished || {}), [playerId]: true };
+  const scores = {
+    ...(room.scores || {}),
+    [playerId]: room.scores?.[playerId] ?? {
+      primary: 0,
+      label: 'Away',
+      progress: 1,
+    },
+  };
+  const updates: Record<string, unknown> = {
+    [`players/${playerId}/presence`]: 'lobby',
+    finished,
+    scores,
+  };
+
+  const stillPlaying = Object.values(room.players || {}).filter(
+    (p) => p.id !== playerId && getPresence(p) === 'playing',
+  );
+  const game = getGame(room.gameId);
+  if (stillPlaying.length === 0 || (game?.modes.includes('turn') && stillPlaying.length < 2)) {
+    updates.status = 'lobby';
+    updates.scores = {};
+    updates.finished = {};
+    updates.gameState = null;
+    updates.winnerId = null;
+    updates.countdownEndsAt = null;
+  } else if (stillPlaying.every((p) => finished[p.id])) {
+    updates.status = 'results';
+  }
+
+  await update(ref(db, `rooms/${normalized}`), updates);
+  await pushNotice(normalized, {
+    kind: 'forfeit',
+    text: `${target.name} left the match (away)`,
+    playerId,
+  });
 }
 
 export async function updateScore(code: string, playerId: string, score: ScoreValue) {
@@ -484,8 +996,6 @@ export async function markFinished(code: string, playerId: string) {
     const room = store[normalized];
     if (!room) return;
     room.finished = { ...room.finished, [playerId]: true };
-    // Wait for every player still in the match — not just whoever is connected
-    // this instant (flaky connected flags were ending races for everyone early).
     if (allMatchPlayersFinished(room)) {
       room.status = 'results';
     }
@@ -523,15 +1033,15 @@ export async function sendChatMessage(
     fromId: from.id,
     fromName: from.name,
     text: cleaned,
-    at: Date.now(),
+    at: nowMs(),
   };
   if (!isFirebaseConfigured()) {
     const store = readLocal();
     const room = store[normalized];
     if (!room) return;
-    const id = `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    if (!room.players[from.id]) return;
+    const id = `m_${nowMs()}_${Math.random().toString(36).slice(2, 7)}`;
     room.chat = { ...(room.chat || {}), [id]: msg };
-    // keep last ~40 messages
     const ids = Object.keys(room.chat).sort(
       (a, b) => (room.chat![a].at || 0) - (room.chat![b].at || 0),
     );
@@ -542,6 +1052,8 @@ export async function sendChatMessage(
     return;
   }
   const { db } = getFirebase();
+  const meSnap = await get(ref(db, `rooms/${normalized}/players/${from.id}`));
+  if (!meSnap.exists()) return;
   await push(ref(db, `rooms/${normalized}/chat`), msg);
 }
 
@@ -551,7 +1063,7 @@ export async function nudgePlayer(
   from: PlayerInfo,
 ) {
   const normalized = code.trim().toUpperCase();
-  const nudge: Nudge = { fromId: from.id, fromName: from.name, at: Date.now() };
+  const nudge: Nudge = { fromId: from.id, fromName: from.name, at: nowMs() };
   if (!isFirebaseConfigured()) {
     const store = readLocal();
     const room = store[normalized];
@@ -580,11 +1092,95 @@ export async function clearNudge(code: string, targetId: string) {
 
 /** Remove a stuck player from the party (host transfer applies if needed). */
 export async function removePlayer(code: string, targetId: string) {
-  await leaveRoom(code, targetId);
+  await leaveRoom(code, targetId, { kicked: true });
 }
 
 export function chatList(room: RoomData): (ChatMessage & { id: string })[] {
   return Object.entries(room.chat || {})
     .map(([id, m]) => ({ id, ...m }))
     .sort((a, b) => a.at - b.at);
+}
+
+export function noticeList(room: RoomData): (RoomNotice & { id: string })[] {
+  return Object.entries(room.notices || {})
+    .map(([id, n]) => ({ id, ...n }))
+    .sort((a, b) => a.at - b.at);
+}
+
+/**
+ * Idempotent room health pass — any online client may run this.
+ * Handles: countdown→playing, host transfer, match forfeits, ghost prune.
+ */
+export async function reconcileRoom(code: string, actorId: string): Promise<void> {
+  const normalized = code.trim().toUpperCase();
+  const t = nowMs();
+
+  const run = async (room: RoomData): Promise<void> => {
+    if (!room.players?.[actorId]) return;
+    if (!isPlayerOnline(room.players[actorId], t)) return;
+
+    // 1) Countdown → playing
+    if (room.status === 'countdown') {
+      const ends = room.countdownEndsAt ?? 0;
+      if (ends && t >= ends) {
+        await promoteCountdownToPlaying(normalized);
+        room = { ...room, status: 'playing' };
+      }
+    }
+
+    // 2) Host transfer if host is away
+    const host = room.players[room.hostId];
+    const hostMissing = !host;
+    const hostAwayLong = hostMissing || playerAwayMs(host, t) >= HOST_AWAY_MS;
+    if (hostAwayLong) {
+      const next = pickNextHost(room, room.hostId, t);
+      if (next && next.id !== room.hostId) {
+        // Oldest online player performs the transfer to reduce write races.
+        if (onlinePlayers(room, t)[0]?.id === actorId) {
+          await transferHost(normalized, next.id);
+          room = { ...room, hostId: next.id };
+        }
+      }
+    }
+
+    // 3) Forfeit away match participants
+    if (room.status === 'playing' || (room.status === 'countdown' && !isCountdownActive(room, t))) {
+      for (const p of playersInMatch(room)) {
+        if (p.id === actorId) continue;
+        if (isPlayerOnline(p, t)) continue;
+        if (playerAwayMs(p, t) < MATCH_FORFEIT_MS) continue;
+        // Only one reconciler: oldest online player
+        const leader = onlinePlayers(room, t)[0];
+        if (leader && leader.id === actorId) {
+          await forfeitMatchPlayer(normalized, p.id);
+        }
+      }
+    }
+
+    // 4) Prune long-away ghosts (not during active countdown)
+    if (room.status === 'lobby' || room.status === 'results') {
+      const leader = onlinePlayers(room, t)[0];
+      if (leader && leader.id === actorId) {
+        for (const p of playersList(room)) {
+          if (p.id === actorId) continue;
+          if (isPlayerOnline(p, t)) continue;
+          if (playerAwayMs(p, t) < PRUNE_AWAY_MS) continue;
+          await leaveRoom(normalized, p.id, { kicked: true });
+        }
+      }
+    }
+  };
+
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    await run(room);
+    return;
+  }
+
+  const { db } = getFirebase();
+  const snap = await get(ref(db, `rooms/${normalized}`));
+  if (!snap.exists()) return;
+  await run(snap.val() as RoomData);
 }
