@@ -102,12 +102,24 @@ Set the same `VITE_FIREBASE_*` values as GitHub Actions secrets / env vars at bu
 ## How to play with friends
 
 1. Open Play Place on your phone
-2. Pick a game → **Create Room**
+2. Pick a game → **Create Room** (or **Host room** on the games list)
 3. Share the **room code** or **Copy invite link**
-4. Friends open the link (or enter the code) → host taps **Start match!**
+4. Friends open the link (or enter the code) → everyone taps **Ready?** → host taps **Start match!**
 5. Rematch from results
 
+### Party etiquette (built-in)
+
+- **Quit game** leaves the current mini-game but keeps you in the party lobby
+- **Leave party** removes you from the room (host crown passes to someone still online)
+- Away / closed tabs show as **away**; the host can remove them
+- If the host goes away, host transfers automatically after a short wait
+- Players who go away mid-match are forfeited so the round can finish
+- Joining mid-match parks you in the lobby until the next game
+- Host can **Make X host** from the player list
+
 Without Firebase configured, the app still runs in **demo mode**: rooms are stored in `localStorage` on that browser only (great for UI testing, not cross-device).
+
+Deploy updated [`database.rules.json`](database.rules.json) in Firebase so `countdown` status is allowed.
 
 ## Scripts
 

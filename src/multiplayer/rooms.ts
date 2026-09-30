@@ -869,10 +869,6 @@ export async function quitMatch(code: string, playerId: string) {
 /** Mark a stuck/away racer as finished and out of the match. */
 export async function forfeitMatchPlayer(code: string, playerId: string) {
   const normalized = code.trim().toUpperCase();
-  const nameHint = async () => {
-    /* filled below */
-  };
-  void nameHint;
 
   if (!isFirebaseConfigured()) {
     const store = readLocal();

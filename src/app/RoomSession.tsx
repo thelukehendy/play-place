@@ -219,17 +219,23 @@ export function RoomSession({
             onError={setError}
           />
 
-          <div style={{ height: 12 }} />
-          <Button
-            variant={amReady ? 'green' : 'sky'}
-            block
-            onClick={() => {
-              sfxReady();
-              setPlayerReady(room.code, player.id, !amReady).catch((err) => setError(String(err)));
-            }}
-          >
-            {amReady ? 'Ready!' : 'Ready?'}
-          </Button>
+          {!optedOutOfMatch ? (
+            <>
+              <div style={{ height: 12 }} />
+              <Button
+                variant={amReady ? 'green' : 'sky'}
+                block
+                onClick={() => {
+                  sfxReady();
+                  setPlayerReady(room.code, player.id, !amReady).catch((err) =>
+                    setError(String(err)),
+                  );
+                }}
+              >
+                {amReady ? 'Ready!' : 'Ready?'}
+              </Button>
+            </>
+          ) : null}
 
           <div style={{ height: 14 }} />
           <p className="h3">Game</p>
