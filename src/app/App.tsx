@@ -20,12 +20,14 @@ import {
   type RoomData,
 } from '../multiplayer/rooms';
 import { usePartyLifecycle } from '../multiplayer/usePartyLifecycle';
+import { useWakeLock } from '../multiplayer/useWakeLock';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import { randomSeed } from '../lib/random';
 import type { GameFinishPayload } from '../games/types';
 import { Panel } from '../ui/Panel';
 import { Button } from '../ui/Button';
 import { PartyChatProvider } from './PartyChat';
+import { loadWordDict } from '../games/word-claim/dictionary';
 
 const ACTIVE_ROOM_KEY = 'playplace.activeRoom';
 
@@ -71,6 +73,27 @@ export function App() {
   const goHome = useCallback(() => setScreen({ name: 'welcome' }), []);
 
   usePartyLifecycle(roomCode);
+
+  const meInMatch = (() => {
+    if (!roomSnap || !roomCode) return false;
+    const me = roomSnap.players?.[getOrCreatePlayerId()];
+    if (!me || getPresence(me) !== 'playing') return false;
+    return isCountdownActive(roomSnap) || isMatchLive(roomSnap);
+  })();
+  useWakeLock(meInMatch);
+
+  useEffect(() => {
+    void loadWordDict().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const lock =
+      screen.name === 'room' &&
+      !!roomSnap &&
+      (roomSnap.status === 'playing' || roomSnap.status === 'countdown');
+    document.body.classList.toggle('match-lock-scroll', lock);
+    return () => document.body.classList.remove('match-lock-scroll');
+  }, [screen.name, roomSnap]);
 
   const bindRoom = useCallback((code: string) => {
     const normalized = code.toUpperCase();
@@ -226,18 +249,24 @@ export function App() {
     setScreen({ name: 'room' });
   };
 
-  const playInRoom = async (gameId: string) => {
+  const playInRoom = async (gameId: string, opts?: { start: boolean }) => {
     if (!roomCode) return;
     setBusy(true);
     setError('');
     try {
-      if (roomSnap && !allConnectedReady(roomSnap)) {
-        await setRoomGame(roomCode, gameId);
-        setScreen({ name: 'room' });
-      } else {
+      const shouldStart =
+        opts?.start === true ||
+        (opts?.start !== false && !!roomSnap && allConnectedReady(roomSnap));
+      if (shouldStart) {
+        if (roomSnap && !allConnectedReady(roomSnap)) {
+          setError('Everyone online must ready up before starting.');
+          return;
+        }
         await startPartyGame(roomCode, gameId);
-        setScreen({ name: 'room' });
+      } else {
+        await setRoomGame(roomCode, gameId);
       }
+      setScreen({ name: 'room' });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

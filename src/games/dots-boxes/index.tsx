@@ -20,6 +20,8 @@ export type DotsState = {
   turn: number;
   playerCount: number;
   over: boolean;
+  /** Monotonic move counter — rejects stale multiplayer writes. */
+  seq: number;
 };
 
 function hCount() {
@@ -43,6 +45,7 @@ export function createDotsState(_seed: number, players: PlayerInfo[]): DotsState
     turn: 0,
     playerCount,
     over: false,
+    seq: 0,
   };
 }
 
@@ -88,7 +91,15 @@ function applyEdge(
   const filled = boxes.every((b) => b !== 0);
   const turn =
     gained > 0 ? state.turn : (state.turn + 1) % state.playerCount;
-  return { ...state, h, v, boxes, turn, over: filled };
+  return {
+    ...state,
+    h,
+    v,
+    boxes,
+    turn,
+    over: filled,
+    seq: (state.seq ?? 0) + 1,
+  };
 }
 
 function scoreList(state: DotsState): number[] {

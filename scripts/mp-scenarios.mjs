@@ -227,7 +227,8 @@ async function scenarioHostTransferOnClose(browser) {
     await joinWithCode(guest, code);
     await host.context.close();
     host = null;
-    await guest.page.waitForTimeout(14000);
+    // Soft presence: host tab close marks disconnect; transfer after HOST_AWAY_MS (~40s).
+    await guest.page.waitForTimeout(45000);
     const text = await guest.page.locator('body').innerText();
     const ok =
       /You pick the games/i.test(text) ||
@@ -292,7 +293,8 @@ async function scenarioForfeitAwayRacer(browser) {
     await waitForPlaying(guest.page);
     await guest.context.close();
     guest = null;
-    await host.page.waitForTimeout(26000);
+    // Race forfeit grace is ~55s after hard disconnect.
+    await host.page.waitForTimeout(62000);
     const body = await host.page.locator('body').innerText();
     const stillInGame = (await host.page.getByRole('button', { name: /quit game/i }).count()) > 0;
     const sawForfeit = /left the match \(away\)|Away|Results!|Party lobby/i.test(body);

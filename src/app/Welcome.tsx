@@ -47,7 +47,8 @@ export function Welcome({ invited, onContinue }: Props) {
                 className="field"
                 value={nick}
                 maxLength={16}
-                autoFocus
+                autoComplete="nickname"
+                enterKeyHint="go"
                 onChange={(e) => setNick(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {

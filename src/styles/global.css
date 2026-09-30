@@ -47,10 +47,25 @@ body {
   background:
     radial-gradient(ellipse 120% 80% at 50% -10%, #7ed6ff 0%, transparent 55%),
     linear-gradient(180deg, #049cd8 0%, #43b047 55%, #2e7d32 100%);
-  background-attachment: fixed;
+  background-attachment: scroll;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
+}
+
+/* During live matches — reduce accidental Safari pull-to-refresh. */
+body.match-lock-scroll {
+  overscroll-behavior: none;
+  overflow: hidden;
+  touch-action: pan-x pan-y;
+}
+
+/* iOS: 16px+ inputs avoid focus zoom */
+input.field,
+textarea.field,
+select.field {
+  font-size: 16px;
 }
 
 button,

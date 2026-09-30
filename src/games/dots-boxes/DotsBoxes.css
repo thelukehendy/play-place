@@ -180,21 +180,46 @@
 }
 
 .dab-h {
+  position: relative;
   flex: 1;
-  height: 14px;
+  height: 18px;
   background: #ddd;
   border: none;
   margin: 0 -1px;
   border-radius: 4px;
+  /* Invisible fat thumb target (~44pt) */
+  touch-action: manipulation;
+}
+
+.dab-h::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 44px;
 }
 
 .dab-v {
-  width: 14px;
-  height: 48px;
+  position: relative;
+  width: 18px;
+  height: 52px;
   background: #ddd;
   border: none;
   border-radius: 4px;
   margin: -1px 0;
+  touch-action: manipulation;
+}
+
+.dab-v::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 44px;
 }
 
 .dab-board-wrap.can-play .dab-h:not(.on):not(:disabled),

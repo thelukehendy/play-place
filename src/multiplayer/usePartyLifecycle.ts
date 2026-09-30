@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { getOrCreatePlayerId } from '../lib/player';
 import {
   HEARTBEAT_MS,
@@ -8,20 +8,26 @@ import {
   subscribeRoom,
 } from '../multiplayer/rooms';
 
+/** Only treat a long background as a hard disconnect (iPhone lock/switch is normal). */
+const HIDDEN_DISCONNECT_MS = 75_000;
+
 /**
  * Keeps the local player marked online, runs room reconciliation
- * (host transfer, forfeits, countdown→playing), and marks disconnect
- * on tab hide / unload.
+ * (host transfer, forfeits, countdown→playing).
+ *
+ * Soft backgrounding: brief lock/app-switch does NOT mark disconnected —
+ * heartbeats simply pause and lastSeen goes stale. Hard disconnect only on
+ * pagehide (tab close) or after a long hidden stretch.
  */
 export function usePartyLifecycle(code: string | null) {
   const playerId = getOrCreatePlayerId();
-  const codeRef = useRef(code);
-  codeRef.current = code;
 
   useEffect(() => {
     if (!code) return;
 
     let stopped = false;
+    let hiddenTimer: number | null = null;
+
     const beat = () => {
       if (stopped || document.visibilityState === 'hidden') return;
       heartbeat(code, playerId).catch(() => undefined);
@@ -35,20 +41,33 @@ export function usePartyLifecycle(code: string | null) {
     };
     reconcile();
     const unsub = subscribeRoom(code, () => {
-      // Debounce via microtask coalescing
       window.setTimeout(reconcile, 50);
     });
     const rc = window.setInterval(reconcile, 2500);
 
+    const clearHiddenTimer = () => {
+      if (hiddenTimer != null) {
+        window.clearTimeout(hiddenTimer);
+        hiddenTimer = null;
+      }
+    };
+
     const onVis = () => {
       if (document.visibilityState === 'hidden') {
-        markDisconnected(code, playerId).catch(() => undefined);
+        clearHiddenTimer();
+        // Soft: do not flip connected:false — iPhone lock is common.
+        hiddenTimer = window.setTimeout(() => {
+          markDisconnected(code, playerId).catch(() => undefined);
+        }, HIDDEN_DISCONNECT_MS);
       } else {
+        clearHiddenTimer();
         beat();
         reconcile();
       }
     };
+
     const onHide = () => {
+      // Real navigation/tab close — mark away promptly.
       markDisconnected(code, playerId).catch(() => undefined);
     };
 
@@ -57,6 +76,7 @@ export function usePartyLifecycle(code: string | null) {
 
     return () => {
       stopped = true;
+      clearHiddenTimer();
       window.clearInterval(hb);
       window.clearInterval(rc);
       unsub();
