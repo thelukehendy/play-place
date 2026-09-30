@@ -35,6 +35,27 @@
   background: var(--sky);
 }
 
+.signal-penalty {
+  animation: signal-foul 0.35s var(--bounce);
+  background: linear-gradient(160deg, #ff6b6b, #e52521) !important;
+  color: var(--cloud);
+}
+
+@keyframes signal-foul {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(0.96) translateX(-4px);
+  }
+  70% {
+    transform: scale(0.96) translateX(4px);
+  }
+  100% {
+    transform: scale(1) translateX(0);
+  }
+}
+
 .signal-meta {
   margin-top: 10px;
   font-weight: 800;

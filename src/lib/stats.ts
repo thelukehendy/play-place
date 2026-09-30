@@ -54,12 +54,23 @@ export function recordMultiplayerMatch(input: {
   gameId: string;
   code: string;
   localPlayerId: string;
-  players: { id: string; name: string; primary: number; label?: string }[];
+  players: {
+    id: string;
+    name: string;
+    primary: number;
+    label?: string;
+    lowerIsBetter?: boolean;
+  }[];
   winnerId?: string | null;
 }) {
   const stats = loadStats();
+  const lowerIsBetter = input.players.some((p) => p.lowerIsBetter);
   const primaries = input.players.map((p) => p.primary);
-  const best = primaries.length ? Math.max(...primaries) : 0;
+  const best = primaries.length
+    ? lowerIsBetter
+      ? Math.min(...primaries)
+      : Math.max(...primaries)
+    : 0;
   const topIds = input.players.filter((p) => p.primary === best).map((p) => p.id);
   const soleWinner =
     input.winnerId || (topIds.length === 1 ? topIds[0] : undefined);
@@ -75,7 +86,11 @@ export function recordMultiplayerMatch(input: {
     g.played += 1;
     if (localWon) g.wins += 1;
     g.bestPrimary =
-      g.bestPrimary == null ? local.primary : Math.max(g.bestPrimary, local.primary);
+      g.bestPrimary == null
+        ? local.primary
+        : lowerIsBetter
+          ? Math.min(g.bestPrimary, local.primary)
+          : Math.max(g.bestPrimary, local.primary);
     stats.byGame[input.gameId] = g;
   }
 
