@@ -4,6 +4,9 @@ import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import {
   getPresence,
   hostName,
+  isCountdownActive,
+  isMatchLive,
+  isPlayerOnline,
   playersList,
   subscribeRoom,
   type RoomData,
@@ -18,12 +21,20 @@ type Props = {
   onQuitMultiplayer: () => void;
 };
 
-function statusLabel(room: RoomData, playerId: string): string {
+function statusLabel(room: RoomData, playerId: string, now: number): string {
   const player = room.players?.[playerId];
   if (!player) return 'Left';
-  if (!player.connected) return 'Away';
+  if (!isPlayerOnline(player, now)) return 'Away';
   if (room.status === 'results') return player.ready ? 'Results · ready' : 'In results';
-  if (room.status === 'countdown') return 'Starting…';
+  if (isCountdownActive(room, now)) {
+    return getPresence(player) === 'playing' ? 'Starting…' : 'Sitting out';
+  }
+  if (isMatchLive(room, now)) {
+    if (getPresence(player) === 'playing') {
+      return room.finished?.[playerId] ? 'Finished' : `Playing ${getGame(room.gameId)?.title ?? ''}`;
+    }
+    return 'In lobby';
+  }
   if (room.status === 'lobby' || getPresence(player) === 'lobby') {
     return player.ready ? 'Lobby · ready ✓' : 'In lobby';
   }
@@ -34,6 +45,7 @@ function statusLabel(room: RoomData, playerId: string): string {
 export function PartyLinked({ code, onLobby, onQuitMultiplayer }: Props) {
   const [room, setRoom] = useState<RoomData | null>(null);
   const [copied, setCopied] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const youId = getOrCreatePlayerId();
 
   useEffect(() => {
@@ -41,9 +53,16 @@ export function PartyLinked({ code, onLobby, onQuitMultiplayer }: Props) {
     return () => unsub();
   }, [code]);
 
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const players = room ? playersList(room) : [];
   const game = room ? getGame(room.gameId) : null;
   const host = room ? hostName(room) : 'Host';
+  const live = room ? isMatchLive(room, now) : false;
+  const counting = room ? isCountdownActive(room, now) : false;
 
   return (
     <Panel className="join-panel" style={{ marginBottom: 12 }}>
@@ -66,9 +85,9 @@ export function PartyLinked({ code, onLobby, onQuitMultiplayer }: Props) {
       </Button>
 
       <p className="muted" style={{ margin: '12px 0 8px' }}>
-        {room?.status === 'playing' && game
+        {live && game
           ? `Match: ${game.emoji} ${game.title}`
-          : room?.status === 'countdown' && game
+          : counting && game
             ? `Starting ${game.emoji} ${game.title}…`
             : room?.status === 'results' && game
               ? `Results: ${game.emoji} ${game.title}`
@@ -82,7 +101,7 @@ export function PartyLinked({ code, onLobby, onQuitMultiplayer }: Props) {
               {p.id === youId ? ' (you)' : ''}
               {p.id === room?.hostId ? ' 👑' : ''} —{' '}
               <span className="muted" style={{ fontWeight: 800 }}>
-                {statusLabel(room!, p.id)}
+                {statusLabel(room!, p.id, now)}
               </span>
             </li>
           ))}
@@ -97,7 +116,7 @@ export function PartyLinked({ code, onLobby, onQuitMultiplayer }: Props) {
           Lobby
         </Button>
         <Button variant="ghost" block onClick={onQuitMultiplayer}>
-          Quit multiplayer
+          Leave party
         </Button>
       </div>
     </Panel>

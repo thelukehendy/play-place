@@ -4,11 +4,16 @@ import type { GameFinishPayload, ScoreValue } from '../games/types';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import { isFirebaseConfigured } from '../multiplayer/firebase';
 import {
+  NUDGE_REMOVE_MS,
   allConnectedReady,
   clearNudge,
   finishTurnGame,
   getPresence,
+  hasOptedOutOfMatch,
   hostName,
+  isCountdownActive,
+  isMatchLive,
+  isPlayerOnline,
   markFinished,
   nudgePlayer,
   playersList,
@@ -18,6 +23,7 @@ import {
   setSharedGameState,
   startMatch,
   subscribeRoom,
+  transferHost,
   updateScore,
   type RoomData,
   type RoomPlayer,
@@ -31,12 +37,11 @@ import { recordMultiplayerMatch } from '../lib/stats';
 import { sfxCountdown, sfxFinish, sfxGo, sfxReady } from '../lib/sfx';
 import { ScreenHeader } from './PartyChat';
 
-const NUDGE_REMOVE_MS = 6000;
-
 type Props = {
   code: string;
   onBrowseGames: () => void;
   onQuitGame: () => void;
+  onLeaveParty: () => void;
   onHostPickGame: (gameId: string) => void;
 };
 
@@ -50,7 +55,13 @@ function useNow(active: boolean, intervalMs = 100) {
   return now;
 }
 
-export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }: Props) {
+export function RoomSession({
+  code,
+  onBrowseGames,
+  onQuitGame,
+  onLeaveParty,
+  onHostPickGame,
+}: Props) {
   const [room, setRoom] = useState<RoomData | null>(null);
   const [error, setError] = useState('');
   const [inviteNote, setInviteNote] = useState('');
@@ -58,7 +69,14 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
     () => ({ id: getOrCreatePlayerId(), name: ensureNickname() }),
     [],
   );
-  const now = useNow(!!room && (room.status === 'countdown' || room.status === 'playing'));
+  const now = useNow(
+    !!room &&
+      (room.status === 'countdown' ||
+        room.status === 'playing' ||
+        room.status === 'lobby' ||
+        room.status === 'results'),
+    room?.status === 'countdown' || room?.status === 'playing' ? 100 : 500,
+  );
 
   useEffect(() => {
     const unsub = subscribeRoom(code, setRoom);
@@ -106,30 +124,23 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
   const isHost = room.hostId === player.id;
   const game = getGame(room.gameId);
   const me = room.players?.[player.id];
-  const myPresence = me ? getPresence(me) : 'lobby';
-  const optedOutOfMatch =
-    room.status === 'playing' &&
-    myPresence === 'lobby' &&
-    !!room.finished?.[player.id];
+  const optedOutOfMatch = hasOptedOutOfMatch(room, player.id, now);
+  const countdownActive = isCountdownActive(room, now);
+  const matchLive = isMatchLive(room, now);
 
-  const countdownEnds = room.countdownEndsAt ?? 0;
-  const inCountdown = room.status === 'countdown' && now < countdownEnds;
-  const matchLive =
-    room.status === 'playing' || (room.status === 'countdown' && now >= countdownEnds);
-
-  if (inCountdown && game) {
+  if (countdownActive && game) {
     return (
       <CountdownScreen
         room={room}
         gameTitle={`${game.emoji} ${game.title}`}
-        endsAt={countdownEnds}
+        endsAt={room.countdownEndsAt ?? 0}
         now={now}
       />
     );
   }
 
   if (room.status === 'lobby' || optedOutOfMatch) {
-    const readyOk = allConnectedReady(room);
+    const readyOk = allConnectedReady(room, now);
     const amReady = !!me?.ready;
     return (
       <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
@@ -149,6 +160,12 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
           {!isFirebaseConfigured() ? (
             <p className="muted" style={{ marginBottom: 10 }}>
               Demo mode: rooms stay on this device only.
+            </p>
+          ) : null}
+
+          {optedOutOfMatch ? (
+            <p style={{ fontWeight: 800, marginBottom: 10, color: 'var(--green-dark)' }}>
+              You left the match — hang in the lobby while others finish.
             </p>
           ) : null}
 
@@ -198,20 +215,27 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
           <ReadyPlayerList
             room={room}
             youId={player.id}
+            now={now}
             onError={setError}
           />
 
-          <div style={{ height: 12 }} />
-          <Button
-            variant={amReady ? 'green' : 'sky'}
-            block
-            onClick={() => {
-              sfxReady();
-              setPlayerReady(room.code, player.id, !amReady).catch((err) => setError(String(err)));
-            }}
-          >
-            {amReady ? 'Ready!' : 'Ready?'}
-          </Button>
+          {!optedOutOfMatch ? (
+            <>
+              <div style={{ height: 12 }} />
+              <Button
+                variant={amReady ? 'green' : 'sky'}
+                block
+                onClick={() => {
+                  sfxReady();
+                  setPlayerReady(room.code, player.id, !amReady).catch((err) =>
+                    setError(String(err)),
+                  );
+                }}
+              >
+                {amReady ? 'Ready!' : 'Ready?'}
+              </Button>
+            </>
+          ) : null}
 
           <div style={{ height: 14 }} />
           <p className="h3">Game</p>
@@ -220,7 +244,7 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
               ? 'You pick the games for the party.'
               : `${hostName(room)} picks the games — hang tight.`}
           </p>
-          {room.status === 'playing' ? (
+          {matchLive && optedOutOfMatch ? (
             <p style={{ fontWeight: 800 }}>
               {game?.emoji} {game?.title ?? room.gameId} — in progress
             </p>
@@ -230,7 +254,7 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
               value={room.gameId}
               onChange={(e) => {
                 if (!readyOk) {
-                  setError('Everyone must ready up before starting.');
+                  setError('Everyone online must ready up before starting.');
                   return;
                 }
                 onHostPickGame(e.target.value);
@@ -250,7 +274,7 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
           )}
 
           <div style={{ height: 14 }} />
-          {room.status === 'playing' ? (
+          {matchLive && optedOutOfMatch ? (
             <Button variant="sky" block onClick={onBrowseGames}>
               Browse games
             </Button>
@@ -258,7 +282,7 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
             <>
               {!readyOk ? (
                 <p className="muted" style={{ marginBottom: 8 }}>
-                  Waiting for everyone to ready up before start.
+                  Waiting for everyone online to ready up before start.
                 </p>
               ) : null}
               <Button
@@ -276,6 +300,11 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
           ) : (
             <p className="muted">Waiting for {hostName(room)} to start…</p>
           )}
+
+          <div style={{ height: 14 }} />
+          <Button variant="ghost" block onClick={onLeaveParty}>
+            Leave party
+          </Button>
         </Panel>
       </div>
     );
@@ -287,15 +316,18 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
         room={room}
         playerId={player.id}
         isHost={isHost}
+        now={now}
         onRematch={() => {
-          if (!allConnectedReady(room)) {
-            setError('Everyone must ready up for a rematch.');
+          if (!allConnectedReady(room, now)) {
+            setError('Everyone online must ready up for a rematch.');
             return;
           }
           rematch(room.code).catch((err) => setError(String(err)));
         }}
         onPickGame={(gameId) => onHostPickGame(gameId)}
         onBrowseGames={onBrowseGames}
+        onLeaveParty={onLeaveParty}
+        onError={setError}
       />
     );
   }
@@ -314,6 +346,42 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
         <Panel>
           <p>Unknown game.</p>
           <Button onClick={onBrowseGames}>Games</Button>
+        </Panel>
+      </div>
+    );
+  }
+
+  // Late joiner / spectator: presence lobby during live match (without finished yet)
+  if (matchLive && me && getPresence(me) === 'lobby') {
+    return (
+      <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
+        <ScreenHeader
+          title={
+            <h2 className="h2" style={{ color: 'var(--gold)' }}>
+              Party lobby
+            </h2>
+          }
+          action={
+            <Button variant="ghost" onClick={onBrowseGames}>
+              Games
+            </Button>
+          }
+        />
+        <Panel>
+          <p style={{ fontWeight: 800, marginBottom: 10 }}>
+            {game.emoji} {game.title} is in progress
+          </p>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            You joined mid-match — you&apos;ll play the next one. Hang out in the lobby or browse games.
+          </p>
+          <ReadyPlayerList room={room} youId={player.id} now={now} onError={setError} />
+          <div style={{ height: 12 }} />
+          <Button variant="sky" block onClick={onBrowseGames}>
+            Browse games
+          </Button>
+          <Button variant="ghost" block onClick={onLeaveParty}>
+            Leave party
+          </Button>
         </Panel>
       </div>
     );
@@ -342,20 +410,39 @@ export function RoomSession({ code, onBrowseGames, onQuitGame, onHostPickGame }:
       room={room}
       game={game}
       player={player}
-      players={players.map((p) => ({ id: p.id, name: p.name }))}
+      players={players
+        .filter((p) => getPresence(p) === 'playing')
+        .map((p) => ({ id: p.id, name: p.name }))}
       onError={setError}
       onQuitGame={onQuitGame}
     />
   );
 }
 
+function playerStatusLabel(room: RoomData, p: RoomPlayer, now: number): string {
+  if (!isPlayerOnline(p, now)) return 'away';
+  if (isCountdownActive(room, now)) {
+    return getPresence(p) === 'playing' ? 'starting…' : 'sitting out';
+  }
+  if (isMatchLive(room, now)) {
+    if (getPresence(p) === 'playing') {
+      return room.finished?.[p.id] ? 'finished' : 'playing';
+    }
+    return 'in lobby';
+  }
+  if (room.status === 'results') return p.ready ? 'Ready!' : 'not ready';
+  return p.ready ? 'Ready!' : 'not ready';
+}
+
 function ReadyPlayerList({
   room,
   youId,
+  now,
   onError,
 }: {
   room: RoomData;
   youId: string;
+  now: number;
   onError?: (msg: string) => void;
 }) {
   const players = playersList(room);
@@ -363,39 +450,33 @@ function ReadyPlayerList({
     () => ({ id: youId, name: ensureNickname() }),
     [youId],
   );
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(id);
-  }, []);
+  const isHost = room.hostId === youId;
 
   return (
     <ul style={{ paddingLeft: 0, listStyle: 'none', fontWeight: 700, margin: 0 }}>
       {players.map((p: RoomPlayer) => {
-        const presence = getPresence(p);
-        let status = '';
-        if (!p.connected) status = 'away';
-        else if (room.status === 'playing' && presence === 'playing') status = 'playing';
-        else status = p.ready ? 'Ready!' : 'not ready';
+        const online = isPlayerOnline(p, now);
+        const status = playerStatusLabel(room, p, now);
         const nudge = room.nudges?.[p.id];
         const nudgedAgo = nudge ? now - nudge.at : 0;
-        const canRemove =
-          !p.ready &&
-          p.connected &&
-          p.id !== youId &&
+        const canNudge =
+          online && !p.ready && p.id !== youId && (room.status === 'lobby' || room.status === 'results');
+        const canRemoveAfterNudge =
+          canNudge &&
           !!nudge &&
-          (nudge.fromId === youId || room.hostId === youId) &&
+          (nudge.fromId === youId || isHost) &&
           nudgedAgo >= NUDGE_REMOVE_MS;
+        const canRemoveAway = isHost && !online && p.id !== youId;
+        const canMakeHost = isHost && online && p.id !== youId;
 
         return (
-          <li key={p.id} style={{ marginBottom: 8 }}>
+          <li key={p.id} style={{ marginBottom: 10 }}>
             <button
               type="button"
               className="ready-name-btn"
-              disabled={p.id === youId || !!p.ready || !p.connected}
+              disabled={!canNudge}
               onClick={() => {
-                if (p.id === youId || p.ready) return;
+                if (!canNudge) return;
                 nudgePlayer(room.code, p.id, you).catch((err) => onError?.(String(err)));
               }}
             >
@@ -404,12 +485,24 @@ function ReadyPlayerList({
               {p.id === youId ? ' (you)' : ''}
               <span className="muted"> — {status}</span>
             </button>
-            {!p.ready && p.id !== youId && p.connected ? (
+            {canNudge ? (
               <p className="muted" style={{ fontSize: '0.8rem', margin: '2px 0 0 4px' }}>
                 Tap name to nudge “Ready to go?”
               </p>
             ) : null}
-            {canRemove ? (
+            {canRemoveAway ? (
+              <Button
+                variant="ghost"
+                block
+                style={{ marginTop: 4 }}
+                onClick={() => {
+                  removePlayer(room.code, p.id).catch((err) => onError?.(String(err)));
+                }}
+              >
+                Remove {p.name} (away)
+              </Button>
+            ) : null}
+            {canRemoveAfterNudge ? (
               <Button
                 variant="ghost"
                 block
@@ -421,6 +514,18 @@ function ReadyPlayerList({
                 }}
               >
                 Remove {p.name}
+              </Button>
+            ) : null}
+            {canMakeHost ? (
+              <Button
+                variant="ghost"
+                block
+                style={{ marginTop: 4 }}
+                onClick={() => {
+                  transferHost(room.code, p.id).catch((err) => onError?.(String(err)));
+                }}
+              >
+                Make {p.name} host
               </Button>
             ) : null}
           </li>
@@ -488,21 +593,27 @@ function ResultsRoom({
   room,
   playerId,
   isHost,
+  now,
   onRematch,
   onPickGame,
   onBrowseGames,
+  onLeaveParty,
+  onError,
 }: {
   room: RoomData;
   playerId: string;
   isHost: boolean;
+  now: number;
   onRematch: () => void;
   onPickGame: (gameId: string) => void;
   onBrowseGames: () => void;
+  onLeaveParty: () => void;
+  onError: (msg: string) => void;
 }) {
   const game = getGame(room.gameId);
   const players = playersList(room);
   const boardPlayers = players.map((p) => ({ id: p.id, name: p.name }));
-  const readyOk = allConnectedReady(room);
+  const readyOk = allConnectedReady(room, now);
   const me = room.players?.[playerId];
   const amReady = !!me?.ready;
 
@@ -559,7 +670,7 @@ function ResultsRoom({
 
         <div style={{ height: 12 }} />
         <p className="h3">Ready for next?</p>
-        <ReadyPlayerList room={room} youId={playerId} />
+        <ReadyPlayerList room={room} youId={playerId} now={now} onError={onError} />
         <div style={{ height: 10 }} />
         <Button
           variant={amReady ? 'green' : 'sky'}
@@ -577,7 +688,7 @@ function ResultsRoom({
           <div className="stack">
             <p className="muted">
               You pick the next game
-              {!readyOk ? ' — wait for everyone to ready up.' : '.'}
+              {!readyOk ? ' — wait for everyone online to ready up.' : '.'}
             </p>
             <select
               className="field"
@@ -597,6 +708,9 @@ function ResultsRoom({
             <Button variant="ghost" block onClick={onBrowseGames}>
               Browse games
             </Button>
+            <Button variant="ghost" block onClick={onLeaveParty}>
+              Leave party
+            </Button>
           </div>
         ) : (
           <div className="stack">
@@ -605,6 +719,9 @@ function ResultsRoom({
             </p>
             <Button variant="ghost" block onClick={onBrowseGames}>
               Browse games
+            </Button>
+            <Button variant="ghost" block onClick={onLeaveParty}>
+              Leave party
             </Button>
           </div>
         )}
@@ -659,7 +776,6 @@ function RoomPlay({
 
   const onLocalScore = (score: ScoreValue) => {
     pendingScore.current = score;
-    // Flush word-progress updates quickly so party rounds can gate on peers.
     const delay = score.progress !== undefined && score.progress < 1 ? 40 : 120;
     if (scoreTimer.current) {
       clearTimeout(scoreTimer.current);
@@ -722,6 +838,9 @@ function RoomPlay({
           youId={player.id}
           finished={finishedPlayers}
         />
+        <p className="muted" style={{ fontSize: '0.8rem', margin: '0 0 8px', textAlign: 'center' }}>
+          Quit game keeps you in the party lobby
+        </p>
         {game.modes.includes('turn') && game.TurnView ? (
           <game.TurnView
             key={`${room.gameId}-${room.seed}`}

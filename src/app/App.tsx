@@ -9,6 +9,8 @@ import {
   allConnectedReady,
   createRoom,
   getPresence,
+  isCountdownActive,
+  isMatchLive,
   joinRoom,
   leaveRoom,
   quitMatch,
@@ -17,6 +19,7 @@ import {
   subscribeRoom,
   type RoomData,
 } from '../multiplayer/rooms';
+import { usePartyLifecycle } from '../multiplayer/usePartyLifecycle';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import { randomSeed } from '../lib/random';
 import type { GameFinishPayload } from '../games/types';
@@ -62,9 +65,12 @@ export function App() {
   const [matchKey, setMatchKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [partyNote, setPartyNote] = useState('');
 
   const goLibrary = useCallback(() => setScreen({ name: 'library' }), []);
   const goHome = useCallback(() => setScreen({ name: 'welcome' }), []);
+
+  usePartyLifecycle(roomCode);
 
   const bindRoom = useCallback((code: string) => {
     const normalized = code.toUpperCase();
@@ -85,23 +91,33 @@ export function App() {
     window.history.replaceState({}, '', url.toString());
   }, []);
 
-  // Live party sync: jump everyone into the same match / results.
+  // Live party sync: jump into matches only when you're actually playing.
   useEffect(() => {
     if (!roomCode) return;
     const playerId = getOrCreatePlayerId();
     return subscribeRoom(roomCode, (room) => {
       setRoomSnap(room);
-      if (!room) return;
 
-      if (room.status === 'playing' || room.status === 'countdown') {
-        const me = room.players?.[playerId];
-        const optedOut =
-          !!me &&
-          room.status === 'playing' &&
-          getPresence(me) === 'lobby' &&
-          !!room.finished?.[playerId];
-        if (optedOut) return;
-        setMatchKey(`${room.gameId}:${room.seed}:${room.status}`);
+      if (!room) {
+        clearRoomBinding();
+        setPartyNote('Party ended.');
+        setScreen({ name: 'library' });
+        return;
+      }
+
+      if (!room.players?.[playerId]) {
+        clearRoomBinding();
+        setPartyNote('You were removed from the party.');
+        setScreen({ name: 'library' });
+        return;
+      }
+
+      const me = room.players[playerId];
+      const inMatchSeat = getPresence(me) === 'playing';
+
+      if ((isCountdownActive(room) || isMatchLive(room)) && inMatchSeat) {
+        // Stable across countdown→playing so the game view does not remount.
+        setMatchKey(`${room.gameId}:${room.seed}`);
         setScreen((current) => (current.name === 'room' ? current : { name: 'room' }));
         return;
       }
@@ -111,7 +127,7 @@ export function App() {
         setScreen((current) => (current.name === 'room' ? current : { name: 'room' }));
       }
     });
-  }, [roomCode]);
+  }, [roomCode, clearRoomBinding]);
 
   const finishWelcome = async () => {
     ensureNickname();
@@ -134,7 +150,6 @@ export function App() {
       return;
     }
     if (code) {
-      // Restore party link quietly, then show games list.
       setBusy(true);
       try {
         const player = { id: getOrCreatePlayerId(), name: ensureNickname() };
@@ -152,6 +167,7 @@ export function App() {
   const handleCreate = async (gameId: string) => {
     setBusy(true);
     setError('');
+    setPartyNote('');
     try {
       const player = { id: getOrCreatePlayerId(), name: ensureNickname() };
       const room = await createRoom(gameId, player);
@@ -167,6 +183,7 @@ export function App() {
   const handleJoin = async (code: string) => {
     setBusy(true);
     setError('');
+    setPartyNote('');
     try {
       const player = { id: getOrCreatePlayerId(), name: ensureNickname() };
       const room = await joinRoom(code, player);
@@ -183,6 +200,7 @@ export function App() {
     const code = roomCode;
     const playerId = getOrCreatePlayerId();
     clearRoomBinding();
+    setPartyNote('');
     setScreen({ name: 'library' });
     if (code) {
       try {
@@ -204,7 +222,8 @@ export function App() {
     } catch {
       /* still leave the match UI */
     }
-    setScreen({ name: 'library' });
+    // Stay linked; lobby UI shows opted-out state (or library until next pull).
+    setScreen({ name: 'room' });
   };
 
   const playInRoom = async (gameId: string) => {
@@ -252,6 +271,15 @@ export function App() {
                 setScreen({ name: 'library' });
               }}
             >
+              OK
+            </Button>
+          </Panel>
+        ) : null}
+
+        {partyNote && !error ? (
+          <Panel>
+            <p style={{ fontWeight: 800, marginBottom: 10 }}>{partyNote}</p>
+            <Button variant="ghost" block onClick={() => setPartyNote('')}>
               OK
             </Button>
           </Panel>
@@ -314,6 +342,7 @@ export function App() {
             code={roomCode}
             onBrowseGames={goLibrary}
             onQuitGame={quitGame}
+            onLeaveParty={quitMultiplayer}
             onHostPickGame={playInRoom}
           />
         ) : null}
