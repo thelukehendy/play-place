@@ -137,3 +137,99 @@
     animation: none;
   }
 }
+
+.reaction-bar {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.reaction-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.reaction-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.howto-list--countdown {
+  margin: 10px auto 0;
+  max-width: 320px;
+  text-align: left;
+  font-size: 0.92rem;
+}
+
+.winner-banner {
+  margin: 0 0 10px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.25rem;
+  color: var(--ink);
+}
+
+.series-panel {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: rgba(245, 197, 24, 0.22);
+}
+
+.series-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.series-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  padding: 4px 6px;
+  border-radius: 10px;
+}
+
+.series-row--you {
+  background: rgba(4, 156, 216, 0.2);
+}
+
+.series-rank {
+  text-align: center;
+}
+
+.series-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-reset {
+  margin-top: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  background: transparent;
+  border: 2px dashed var(--ink);
+  border-radius: 10px;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+}

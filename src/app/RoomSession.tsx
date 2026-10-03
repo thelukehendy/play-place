@@ -7,7 +7,6 @@ import {
   NUDGE_REMOVE_MS,
   REACTION_EMOJIS,
   REACTION_MS,
-  computeRoundPoints,
   recordSeriesRound,
   resetSeries,
   seriesStandings,
@@ -763,8 +762,29 @@ function ResultsRoom({
     });
   }, [room, playerId, players]);
 
+  const iWon = !!room.winnerId && room.winnerId === playerId;
+  const winnerName = room.winnerId ? room.players?.[room.winnerId]?.name : undefined;
+  const standings = seriesStandings(room);
+  const roundsPlayed = Object.keys(room.series?.rounds || {}).length;
+
+  useEffect(() => {
+    if (!Object.keys(room.scores || {}).length) return;
+    recordSeriesRound(room.code, room).catch(() => undefined);
+  }, [room]);
+
+  useEffect(() => {
+    if (!iWon) return;
+    const key = `playplace.won.${room.code}.${room.seed}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+    sfxWin();
+  }, [iWon, room.code, room.seed]);
+
+  const reactions = activeReactions(room, now);
+
   return (
     <div className="stack" style={{ animation: 'pop-in 0.35s var(--bounce)' }}>
+      {iWon ? <Confetti /> : null}
       <ScreenHeader
         title={
           <h2
@@ -788,7 +808,50 @@ function ResultsRoom({
         <p className="h3" style={{ marginBottom: 10 }}>
           {game?.emoji} {game?.title}
         </p>
-        <Scoreboard players={boardPlayers} scores={room.scores || {}} youId={playerId} />
+        {winnerName ? (
+          <p className="winner-banner">
+            {iWon ? 'You won! 🏆' : `🏆 ${winnerName} wins!`}
+          </p>
+        ) : null}
+        <Scoreboard
+          players={boardPlayers}
+          scores={room.scores || {}}
+          youId={playerId}
+          reactions={reactions}
+        />
+        <ReactionBar code={room.code} playerId={playerId} />
+        {standings.length > 0 ? (
+          <div className="series-panel">
+            <p className="h3" style={{ marginBottom: 6 }}>
+              Party standings · {roundsPlayed} {roundsPlayed === 1 ? 'round' : 'rounds'}
+            </p>
+            <ol className="series-list">
+              {standings.map((row, i) => (
+                <li key={row.id} className={row.id === playerId ? 'series-row series-row--you' : 'series-row'}>
+                  <span className="series-rank">{i === 0 ? '👑' : i + 1}</span>
+                  <span className="series-name">
+                    {avatarOf(row.id)} {row.name}
+                  </span>
+                  <span className="series-pts">
+                    {row.pts} pt{row.pts === 1 ? '' : 's'}
+                  </span>
+                </li>
+              ))}
+            </ol>
+            {isHost && roundsPlayed > 0 ? (
+              <button
+                type="button"
+                className="series-reset"
+                onClick={() => {
+                  if (!window.confirm('Reset party standings?')) return;
+                  resetSeries(room.code).catch(() => undefined);
+                }}
+              >
+                Reset standings
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <p className="muted" style={{ margin: '12px 0 0', textAlign: 'center' }}>
           Join code <strong>{room.code}</strong> · party still linked
         </p>
@@ -859,6 +922,25 @@ function ResultsRoom({
                 ? `Ready! Waiting for ${hostName(room)} to tap Play again.`
                 : `${hostName(room)} picks the next game. Ready up when you are.`}
             </p>
+            {iWon ? (
+              <>
+                <p className="muted" style={{ marginTop: 4 }}>
+                  Winner's choice: pick the next game
+                </p>
+                <select
+                  className="field"
+                  defaultValue={room.gameId}
+                  aria-label="Winner picks the next game"
+                  onChange={(e) => onPickGame(e.target.value)}
+                >
+                  {GAMES.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.emoji} {g.title}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : null}
             <Button variant="ghost" block onClick={onBrowseGames}>
               Browse games
             </Button>
@@ -965,6 +1047,8 @@ function RoomPlay({
   const othersLeft = livePlayers.some((p) => p.id !== player.id);
 
   const canTapPlayer = (id: string) => id !== player.id;
+  const [showHowTo, setShowHowTo] = useState(false);
+  const reactions = activeReactions(room, now);
 
   const onTapPlayer = (id: string) => {
     const target = livePlayers.find((p) => p.id === id);
@@ -1017,11 +1101,22 @@ function RoomPlay({
           </h2>
         }
         action={
-          <Button variant="ghost" onClick={onQuitGame}>
-            Quit game
-          </Button>
+          <div className="header-actions">
+            <Button
+              variant="ghost"
+              className="icon-btn"
+              aria-label={`How to play ${game.title}`}
+              onClick={() => setShowHowTo(true)}
+            >
+              ?
+            </Button>
+            <Button variant="ghost" onClick={onQuitGame}>
+              Quit game
+            </Button>
+          </div>
         }
       />
+      <HowToSheet game={game} open={showHowTo} onClose={() => setShowHowTo(false)} />
       <Panel className="room-play-panel">
         <Scoreboard
           compact
@@ -1033,6 +1128,7 @@ function RoomPlay({
           turnPlayerId={turnPlayer?.id ?? null}
           onPlayerTap={othersLeft ? onTapPlayer : undefined}
           canTapPlayer={canTapPlayer}
+          reactions={reactions}
           renderRowExtra={othersLeft ? renderRowExtra : undefined}
           footerHint={
             othersLeft
@@ -1040,9 +1136,9 @@ function RoomPlay({
               : undefined
           }
         />
-        <p className="muted" style={{ fontSize: '0.8rem', margin: '0 0 8px', textAlign: 'center' }}>
-          Quit game keeps you in the party lobby
-        </p>
+        {game.modes.includes('turn') && othersLeft ? (
+          <ReactionBar code={room.code} playerId={player.id} />
+        ) : null}
         {game.modes.includes('turn') && game.TurnView ? (
           <game.TurnView
             key={`${room.gameId}-${room.seed}`}

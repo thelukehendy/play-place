@@ -3,6 +3,7 @@ import { createRng, formatTime, shuffle } from '../../lib/random';
 import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
 import { GameHud, Rules, Stat } from '../../ui/GameChrome';
 import './NumberRush.css';
+import { sfxBad } from '../../lib/sfx';
 
 export type NumberRushState = {
   order: number[];
@@ -39,7 +40,11 @@ function useNumberRush(
   const elapsed = useElapsed(state.startedAt, state.finishedAt);
 
   const tap = (n: number) => {
-    if (finished.current || n !== state.next) return;
+    if (finished.current) return;
+    if (n !== state.next) {
+      if (state.startedAt) sfxBad();
+      return;
+    }
     setState((s) => {
       const startedAt = s.startedAt ?? Date.now();
       const next = s.next + 1;

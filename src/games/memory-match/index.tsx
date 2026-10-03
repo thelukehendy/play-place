@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createRng, formatTime, shuffle } from '../../lib/random';
 import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
 import { GameHud, Rules, Stat } from '../../ui/GameChrome';
+import { sfxClaim } from '../../lib/sfx';
 import './MemoryMatch.css';
 
 const ICONS = ['⭐', '🔴', '🟦', '🟩', '🟨', '🟤', '⚡', '🌈'];
@@ -114,6 +115,11 @@ function Board({
   footer?: React.ReactNode;
 }) {
   const pairs = state.matched.filter(Boolean).length / 2;
+  const prevPairs = useRef(pairs);
+  useEffect(() => {
+    if (pairs > prevPairs.current) sfxClaim();
+    prevPairs.current = pairs;
+  }, [pairs]);
   return (
     <div>
       <GameHud>

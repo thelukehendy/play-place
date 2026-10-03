@@ -3,6 +3,7 @@ import { createRng, formatTime } from '../../lib/random';
 import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
 import { GameHud, Rules, Stat } from '../../ui/GameChrome';
 import './SignalTap.css';
+import { sfxBad, sfxGood } from '../../lib/sfx';
 
 const ROUNDS = 5;
 
@@ -79,6 +80,8 @@ function useSignal(
 
   const tap = () => {
     if (done.current || state.finishedAt) return;
+    if (state.phase === 'wait') sfxBad();
+    else if (state.phase === 'go') sfxGood();
     setState((s) => {
       if (s.phase === 'wait') {
         return { ...s, falseStarts: s.falseStarts + 1, score: Math.max(0, s.score - 5) };

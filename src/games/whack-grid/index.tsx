@@ -3,6 +3,7 @@ import { createRng, formatTime } from '../../lib/random';
 import type { GameDefinition, RaceGameProps, SoloGameProps } from '../types';
 import { GameHud, Rules, Stat } from '../../ui/GameChrome';
 import './WhackGrid.css';
+import { sfxBad, sfxGood } from '../../lib/sfx';
 
 const GRID = 9;
 const DURATION = 30_000;
@@ -162,6 +163,8 @@ function useWhack(
       return;
     }
 
+    if (index === state.active) sfxGood();
+    else sfxBad();
     setState((s) => {
       if (s.finishedAt || s.active === null) return s;
       if (index !== s.active) {
