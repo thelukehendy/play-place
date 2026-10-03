@@ -1131,7 +1131,7 @@ function RoomPlay({
           reactions={reactions}
           renderRowExtra={othersLeft ? renderRowExtra : undefined}
           footerHint={
-            othersLeft
+            othersLeft && !game.modes.includes('turn')
               ? 'Tap a name to nudge · remove appears after a nudge (or if they go away)'
               : undefined
           }

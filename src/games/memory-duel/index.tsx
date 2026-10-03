@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRng, shuffle } from '../../lib/random';
 import type {
   GameDefinition,
@@ -278,7 +278,8 @@ function SoloView({ initialState, player, onFinish }: SoloGameProps<DuelState>) 
 
 /* ---------- Multiplayer ---------- */
 
-function TurnView({ state, player, players, onStateChange, onFinish }: TurnGameProps<DuelState>) {
+function TurnView({ state: rawState, player, players, onStateChange, onFinish }: TurnGameProps<DuelState>) {
+  const state = useMemo(() => ({ ...rawState, flipped: rawState.flipped ?? [] }), [rawState]);
   const seats = players.slice(0, MAX_PLAYERS);
   const meIndex = seats.findIndex((p) => p.id === player.id);
   const myTurn = !state.over && meIndex >= 0 && state.turn === meIndex;

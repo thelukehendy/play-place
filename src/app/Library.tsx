@@ -117,7 +117,7 @@ export function Library({
   return (
     <div className="library">
       <ScreenHeader
-        title={<h2 className="h2">Game Place</h2>}
+        title={<h2 className="h2">Play Place</h2>}
         action={
           <div className="header-actions">
             <Button

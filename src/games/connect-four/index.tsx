@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   GameDefinition,
   PlayerInfo,
@@ -352,7 +352,8 @@ function SoloView({ initialState, player, onFinish, onStateChange }: SoloGamePro
   );
 }
 
-function TurnView({ state, player, players, onStateChange, onFinish }: TurnGameProps<C4State>) {
+function TurnView({ state: rawState, player, players, onStateChange, onFinish }: TurnGameProps<C4State>) {
+  const state = useMemo(() => ({ ...rawState, win: rawState.win ?? [] }), [rawState]);
   const seats = players.slice(0, MAX_PLAYERS);
   const meIndex = seats.findIndex((p) => p.id === player.id);
   const canPlay = !state.over && meIndex >= 0 && state.turn === meIndex;
