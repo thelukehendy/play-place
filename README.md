@@ -1,6 +1,6 @@
 # Play Place
 
-Phone-friendly mini-game arcade with **11 games**, solo play, and room-code multiplayer.
+Phone-friendly mini-game arcade with **14 games**, solo play, and room-code multiplayer.
 
 Bright toybox / playground vibes (Mario-inspired colors — no Nintendo characters or assets).
 
@@ -11,12 +11,25 @@ Bright toybox / playground vibes (Mario-inspired colors — no Nintendo characte
 3. **Memory Match** — pair cards
 4. **Color Flood** — flood-fill the board
 5. **Lights Out** — turn all lights off
-6. **Pipe Connect** — rotate pipes to link ends
-7. **Anagram Sprint** — unscramble words
-8. **Word Claim** — make words in 60s
-9. **Dots & Boxes** — turn-based duel (vs CPU solo)
-10. **Whack Grid** — smash glowing blocks before they vanish
-11. **Inertia** — slide the ball onto dashed anchors, grab gems, dodge mines
+6. **Signal Tap** — wait for green, tap fast
+7. **Pipe Connect** — rotate pipes to link ends
+8. **Anagram Sprint** — unscramble words
+9. **Word Claim** — make words in 60s
+10. **Dots & Boxes** — turn-based duel (vs CPU solo)
+11. **Connect Four** — turn-based duel, 2–4 players (vs CPU solo)
+12. **Memory Duel** — turn-based pair-grabbing duel (vs CPU solo)
+13. **Whack Grid** — smash glowing blocks before they vanish
+14. **Inertia** — slide the ball onto dashed anchors, grab gems, dodge mines
+
+## Features
+
+- **Quick Play** and a **Daily Challenge** (same puzzle for everyone each day, with a streak)
+- Solo **personal bests**, celebratory results with confetti and share
+- First-time **how to play** cards for every game
+- Party **series standings**, winner picks the next game, emoji **reactions**, avatars
+- Turn games show whose turn it is and buzz your phone on your turn
+- Sound and haptics (with an iOS fallback), Night mode, color-blind friendly marks, reduced-motion support
+- Works offline after first load (service worker)
 
 ## Live site
 

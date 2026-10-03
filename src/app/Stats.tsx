@@ -1,4 +1,5 @@
 import { GAMES, getGame } from '../games/registry';
+import { getAllBests } from '../lib/bests';
 import { loadStats } from '../lib/stats';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
@@ -10,6 +11,8 @@ type Props = {
 
 export function Stats({ onBack }: Props) {
   const stats = loadStats();
+  const bests = getAllBests();
+  const soloRows = GAMES.filter((g) => bests[g.id]);
   const rows = GAMES.map((g) => ({
     game: g,
     stat: stats.byGame[g.id],
@@ -25,6 +28,26 @@ export function Stats({ onBack }: Props) {
           </Button>
         }
       />
+
+      <Panel>
+        <p className="h3">Solo personal bests</p>
+        {soloRows.length === 0 ? (
+          <p className="muted" style={{ marginTop: 8 }}>
+            Finish a solo game to set your first best.
+          </p>
+        ) : (
+          <ul style={{ paddingLeft: 18, fontWeight: 700, margin: '10px 0 0' }}>
+            {soloRows.map((g) => (
+              <li key={g.id} style={{ marginBottom: 6 }}>
+                {g.emoji} {g.title} — <strong>{bests[g.id].label}</strong>
+                <span className="muted"> · {bests[g.id].plays} plays</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <div style={{ height: 12 }} />
 
       <Panel>
         <p className="h3">Your multiplayer record</p>
