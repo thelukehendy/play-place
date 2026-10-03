@@ -10,6 +10,8 @@ import { dotsBoxesGame } from './dots-boxes';
 import { whackGridGame } from './whack-grid';
 import { inertiaGame } from './inertia';
 import { lightsOutGame } from './lights-out';
+import { connectFourGame } from './connect-four';
+import { memoryDuelGame } from './memory-duel';
 import type { GameDefinition } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,6 +26,8 @@ export const GAMES: GameDefinition<any>[] = [
   anagramSprintGame,
   wordClaimGame,
   dotsBoxesGame,
+  connectFourGame,
+  memoryDuelGame,
   whackGridGame,
   inertiaGame,
 ];

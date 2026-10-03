@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { PlayerInfo, ScoreValue } from '../games/types';
+import { avatarOf } from '../lib/avatars';
 import './GameChrome.css';
 
 export function GameHud({ children }: { children: ReactNode }) {
@@ -23,6 +24,7 @@ function ScoreRow({
   tappable,
   onTap,
   extra,
+  reaction,
 }: {
   player: PlayerInfo;
   score?: ScoreValue;
@@ -32,6 +34,7 @@ function ScoreRow({
   tappable: boolean;
   onTap?: () => void;
   extra?: ReactNode;
+  reaction?: string;
 }) {
   const prev = useRef(score?.label);
   const [flash, setFlash] = useState(false);
@@ -57,9 +60,17 @@ function ScoreRow({
     <>
       <div className="score-main">
         <span className="score-name">
+          <span className="score-avatar" aria-hidden>
+            {avatarOf(player.id)}
+          </span>
           {player.name}
           {you ? ' (you)' : ''}
           {turn ? ' · turn' : ''}
+          {reaction ? (
+            <span className="score-reaction" key={reaction} aria-label="reaction">
+              {reaction}
+            </span>
+          ) : null}
         </span>
         <span className="score-status">
           {done ? 'Done ✓' : score ? score.label : 'Waiting…'}
@@ -110,6 +121,7 @@ export function Scoreboard({
   canTapPlayer,
   renderRowExtra,
   footerHint,
+  reactions,
 }: {
   players: PlayerInfo[];
   scores: Record<string, ScoreValue | undefined>;
@@ -122,6 +134,7 @@ export function Scoreboard({
   canTapPlayer?: (playerId: string) => boolean;
   renderRowExtra?: (playerId: string) => ReactNode;
   footerHint?: string;
+  reactions?: Record<string, string>;
 }) {
   const sorted = [...players].sort((a, b) => {
     const aDone = finished.includes(a.id) ? 0 : 1;
@@ -152,6 +165,7 @@ export function Scoreboard({
             tappable={tappable}
             onTap={tappable ? () => onPlayerTap?.(p.id) : undefined}
             extra={renderRowExtra?.(p.id)}
+            reaction={reactions?.[p.id]}
           />
         );
       })}

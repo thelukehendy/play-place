@@ -1,0 +1,119 @@
+.c4-board {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 6px;
+  max-width: 340px;
+  margin: 0 auto;
+  background: var(--sky-deep);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 4px 0 var(--ink);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.c4-board.can-play {
+  outline: 3px solid rgba(67, 176, 71, 0.65);
+  outline-offset: 5px;
+}
+
+.c4-col {
+  display: grid;
+  grid-template-rows: repeat(6, 1fr);
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  touch-action: manipulation;
+}
+
+.c4-board.can-play .c4-col:not(:disabled):active {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.c4-col:disabled {
+  cursor: default;
+}
+
+.c4-slot {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--cream);
+  border: 2px solid rgba(26, 26, 46, 0.55);
+  box-shadow: inset 0 3px 0 rgba(26, 26, 46, 0.18);
+}
+
+.c4-disc {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  font-size: 0.95rem;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.92);
+  background: var(--seat);
+}
+
+.c4-disc.seat-1 {
+  --seat: var(--seat-1);
+}
+.c4-disc.seat-2 {
+  --seat: var(--seat-2);
+  color: var(--ink);
+}
+.c4-disc.seat-3 {
+  --seat: var(--seat-3);
+}
+.c4-disc.seat-4 {
+  --seat: var(--seat-4);
+}
+
+:root[data-cb='on'] .c4-disc.seat-2 {
+  color: #fff;
+}
+:root[data-cb='on'] .c4-disc.seat-4 {
+  color: var(--ink);
+}
+
+.c4-disc.drop {
+  animation: c4-drop 0.42s cubic-bezier(0.5, 0, 0.85, 0.4) both;
+}
+
+.c4-disc.win {
+  animation: c4-win 0.7s ease-in-out infinite;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--gold);
+  z-index: 1;
+}
+
+@keyframes c4-drop {
+  from {
+    transform: translateY(calc(var(--drop) * -112%));
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes c4-win {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .c4-disc.drop,
+  .c4-disc.win {
+    animation: none;
+  }
+}

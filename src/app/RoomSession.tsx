@@ -5,6 +5,13 @@ import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import { isFirebaseConfigured } from '../multiplayer/firebase';
 import {
   NUDGE_REMOVE_MS,
+  REACTION_EMOJIS,
+  REACTION_MS,
+  computeRoundPoints,
+  recordSeriesRound,
+  resetSeries,
+  seriesStandings,
+  sendReaction,
   allConnectedReady,
   clearNudge,
   finishTurnGame,
@@ -35,7 +42,10 @@ import { Scoreboard } from '../ui/GameChrome';
 import { GAMES } from '../games/registry';
 import { copyText, roomInviteUrl, shareRoomInvite } from '../lib/invite';
 import { recordMultiplayerMatch } from '../lib/stats';
-import { sfxCountdown, sfxFinish, sfxGo, sfxReady } from '../lib/sfx';
+import { sfxCountdown, sfxFinish, sfxGo, sfxPop, sfxReady, sfxWin } from '../lib/sfx';
+import { avatarOf, registerAvatars } from '../lib/avatars';
+import { Confetti } from '../ui/Confetti';
+import { HowToSheet } from '../ui/HowToSheet';
 import { ScreenHeader } from './PartyChat';
 
 type Props = {
@@ -80,7 +90,10 @@ export function RoomSession({
   );
 
   useEffect(() => {
-    const unsub = subscribeRoom(code, setRoom);
+    const unsub = subscribeRoom(code, (r) => {
+      registerAvatars(r?.players);
+      setRoom(r);
+    });
     return () => unsub();
   }, [code]);
 
@@ -140,6 +153,7 @@ export function RoomSession({
       <CountdownScreen
         room={room}
         gameTitle={`${game.emoji} ${game.title}`}
+        howTo={game.howTo}
         endsAt={room.countdownEndsAt ?? 0}
         now={now}
         waitingForGo={waitingForSharedGo}
@@ -485,6 +499,39 @@ function playerStatusLabel(room: RoomData, p: RoomPlayer, now: number): string {
   return p.ready ? 'Ready!' : 'not ready';
 }
 
+function activeReactions(room: RoomData, now: number): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [id, r] of Object.entries(room.reactions || {})) {
+    if (now - r.at < REACTION_MS) out[id] = r.emoji;
+  }
+  return out;
+}
+
+function ReactionBar({ code, playerId }: { code: string; playerId: string }) {
+  const last = useRef(0);
+  return (
+    <div className="reaction-bar" role="group" aria-label="Quick reactions" data-sfx="off">
+      {REACTION_EMOJIS.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          className="reaction-btn"
+          aria-label={`React ${emoji}`}
+          onClick={() => {
+            const t = Date.now();
+            if (t - last.current < 900) return;
+            last.current = t;
+            sfxPop();
+            sendReaction(code, playerId, emoji).catch(() => undefined);
+          }}
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ReadyPlayerList({
   room,
   youId,
@@ -544,6 +591,7 @@ function ReadyPlayerList({
                 );
               }}
             >
+              <span aria-hidden>{avatarOf(p.id)} </span>
               {p.name}
               {p.id === room.hostId ? ' 👑' : ''}
               {p.id === youId ? ' (you)' : ''}
@@ -604,12 +652,14 @@ function ReadyPlayerList({
 function CountdownScreen({
   room,
   gameTitle,
+  howTo,
   endsAt,
   now,
   waitingForGo = false,
 }: {
   room: RoomData;
   gameTitle: string;
+  howTo?: string[];
   endsAt: number;
   now: number;
   waitingForGo?: boolean;
@@ -652,6 +702,13 @@ function CountdownScreen({
         <p className="muted" style={{ fontWeight: 800 }}>
           {waitingForGo ? 'Syncing phones…' : 'Everyone starts together'}
         </p>
+        {howTo?.length ? (
+          <ol className="howto-list howto-list--countdown">
+            {howTo.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        ) : null}
       </Panel>
     </div>
   );

@@ -7,6 +7,7 @@ import type {
   TurnGameProps,
 } from '../types';
 import { Rules } from '../../ui/GameChrome';
+import { useOutcomeSound, useYourTurnPing } from '../../ui/TurnChrome';
 import './DotsBoxes.css';
 
 const GRID = 3; // 3x3 boxes => 4x4 dots
@@ -157,6 +158,12 @@ function Board({
   const turnName = names[state.turn] ?? `P${state.turn + 1}`;
   const myTurn = !state.over && meIndex >= 0 && state.turn === meIndex;
   const turnClass = OWNER_CLASS[state.turn + 1] ?? 'p1';
+  useYourTurnPing(myTurn, state.over);
+  useOutcomeSound(
+    state.over,
+    leaders.length === 1 && names[meIndex] === leaders[0],
+    meIndex >= 0,
+  );
 
   return (
     <div>

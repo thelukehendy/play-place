@@ -180,3 +180,25 @@
 .score-row.done .score-bar-fill {
   background: var(--green);
 }
+
+.score-avatar {
+  margin-right: 5px;
+}
+
+.score-reaction {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 1.15rem;
+  animation: reaction-pop 0.5s var(--bounce) both;
+}
+
+@keyframes reaction-pop {
+  from {
+    transform: scale(0.2) translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
