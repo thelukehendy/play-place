@@ -174,3 +174,180 @@
   opacity: 0.7;
 }
 
+
+.library-hero {
+  margin-bottom: 14px;
+}
+
+.hero-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.hero-row .btn {
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.daily-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #fff3c4, var(--cream));
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 0 var(--ink);
+  color: var(--ink);
+  transition: transform 0.12s var(--bounce);
+}
+
+.daily-card:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.daily-card-emoji {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.daily-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.daily-card-kicker {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+
+.daily-card-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.daily-card-sub {
+  font-size: 0.8rem;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+.daily-card-cta {
+  flex-shrink: 0;
+  min-width: 56px;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 3px solid var(--ink);
+  background: var(--red);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+
+.daily-card-cta.done {
+  background: var(--green);
+}
+
+.game-section {
+  margin-bottom: 16px;
+}
+
+.game-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 8px 2px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #fff;
+  text-shadow: 2px 2px 0 var(--ink);
+}
+
+.game-section-sub {
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.9;
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+.game-card {
+  position: relative;
+  overflow: hidden;
+  padding-top: 16px;
+}
+
+.game-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 6px;
+  background: var(--accent, var(--sky));
+}
+
+.game-grid .game-card:last-child:nth-child(odd) {
+  grid-column: span 2;
+}
+
+.best-chip {
+  margin-top: auto;
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(245, 197, 24, 0.35);
+  border: 2px solid var(--ink);
+}
+
+.header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.icon-btn {
+  min-width: var(--tap);
+  padding: 0 14px;
+}
+
+.daily-chip {
+  margin: 0;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #fff;
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+.result-badge {
+  display: inline-block;
+  margin: 4px 0 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 3px solid var(--ink);
+  background: var(--gold);
+  font-family: var(--font-display);
+  font-weight: 800;
+  animation: pop-in 0.5s var(--bounce) both;
+}
+
+.result-daily {
+  margin: 8px 0 0;
+  font-weight: 800;
+  color: var(--green-dark);
+}

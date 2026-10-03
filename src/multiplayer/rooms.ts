@@ -11,7 +11,9 @@ import {
 } from 'firebase/database';
 import { getGame } from '../games/registry';
 import { roomCode as makeCode, randomSeed } from '../lib/random';
-import type { PlayerInfo, ScoreValue } from '../games/types';
+import { compareScores, type PlayerInfo, type ScoreValue } from '../games/types';
+import { getMyAvatar } from '../lib/avatars';
+import { getOrCreatePlayerId } from '../lib/player';
 import { ensureAnonAuth, getFirebase, isFirebaseConfigured } from './firebase';
 
 export type RoomStatus = 'lobby' | 'countdown' | 'playing' | 'results';
@@ -27,6 +29,8 @@ export type RoomPlayer = PlayerInfo & {
   /** Defaults to lobby for older rooms missing the field. */
   presence?: PlayerPresence;
   ready?: boolean;
+  /** Emoji avatar chosen on the home screen. */
+  avatar?: string;
 };
 
 export type RoomData = {
@@ -50,6 +54,19 @@ export type RoomData = {
   notices?: Record<string, RoomNotice>;
   /** Guest game wishes — playerId → gameId. */
   suggestions?: Record<string, string>;
+  /** Latest quick emoji reaction per player. */
+  reactions?: Record<string, Reaction>;
+  /** Running party standings across games. */
+  series?: { rounds?: Record<string, SeriesRound> };
+};
+
+export type Reaction = { emoji: string; at: number };
+
+export type SeriesRound = {
+  gameId: string;
+  at: number;
+  pts: Record<string, number>;
+  names: Record<string, string>;
 };
 
 export type ChatMessage = {
@@ -121,6 +138,7 @@ function playerPayload(
   extras: Partial<RoomPlayer> = {},
 ): RoomPlayer {
   const t = nowMs();
+  const localId = getOrCreatePlayerId();
   return {
     ...player,
     connected: true,
@@ -128,6 +146,7 @@ function playerPayload(
     lastSeenAt: t,
     presence: 'lobby',
     ready: false,
+    ...(player.id === localId ? { avatar: getMyAvatar(localId) } : {}),
     ...extras,
   };
 }
@@ -1266,4 +1285,115 @@ export async function reconcileRoom(code: string, actorId: string): Promise<void
   const snap = await get(ref(db, `rooms/${normalized}`));
   if (!snap.exists()) return;
   await run(snap.val() as RoomData);
+}
+
+export const REACTION_MS = 4_000;
+export const REACTION_EMOJIS = ['👏', '😂', '😮', '🔥', '💀', '❤️'];
+
+export async function sendReaction(code: string, playerId: string, emoji: string) {
+  const normalized = code.trim().toUpperCase();
+  const entry: Reaction = { emoji, at: nowMs() };
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    room.reactions = { ...(room.reactions || {}), [playerId]: entry };
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await set(ref(db, `rooms/${normalized}/reactions/${playerId}`), entry);
+}
+
+const PLACE_POINTS = [3, 2, 1, 1];
+
+/** Placement points for a finished match (ties share the better place). */
+export function computeRoundPoints(room: RoomData): Record<string, number> | null {
+  const scores = room.scores || {};
+  const ids = Object.keys(scores).filter((id) => room.players?.[id]);
+  if (ids.length === 0) return null;
+  const ranked = [...ids].sort((a, b) => {
+    if (room.winnerId) {
+      if (a === room.winnerId) return -1;
+      if (b === room.winnerId) return 1;
+    }
+    return compareScores(scores[a], scores[b]);
+  });
+  const pts: Record<string, number> = {};
+  let place = 0;
+  ranked.forEach((id, i) => {
+    if (i > 0) {
+      const prev = ranked[i - 1];
+      const tied =
+        !room.winnerId && compareScores(scores[prev], scores[id]) === 0;
+      if (!tied) place = i;
+    }
+    pts[id] = PLACE_POINTS[Math.min(place, PLACE_POINTS.length - 1)];
+  });
+  return pts;
+}
+
+/** Idempotent: every client writes the same deterministic round, keyed by match seed. */
+export async function recordSeriesRound(code: string, room: RoomData) {
+  const normalized = code.trim().toUpperCase();
+  const key = String(room.seed);
+  if (room.series?.rounds?.[key]) return;
+  const pts = computeRoundPoints(room);
+  if (!pts) return;
+  const names: Record<string, string> = {};
+  for (const id of Object.keys(pts)) names[id] = room.players?.[id]?.name ?? 'Player';
+  const round: SeriesRound = { gameId: room.gameId, at: nowMs(), pts, names };
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const live = store[normalized];
+    if (!live) return;
+    live.series = { rounds: { ...(live.series?.rounds || {}), [key]: round } };
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await set(ref(db, `rooms/${normalized}/series/rounds/${key}`), round);
+}
+
+export async function resetSeries(code: string) {
+  const normalized = code.trim().toUpperCase();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    room.series = { rounds: {} };
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  await remove(ref(db, `rooms/${normalized}/series`));
+}
+
+export type SeriesRow = {
+  id: string;
+  name: string;
+  pts: number;
+  wins: number;
+};
+
+export function seriesRounds(room: RoomData): SeriesRound[] {
+  return Object.values(room.series?.rounds || {}).sort((a, b) => a.at - b.at);
+}
+
+export function seriesStandings(room: RoomData): SeriesRow[] {
+  const rows: Record<string, SeriesRow> = {};
+  for (const round of seriesRounds(room)) {
+    const top = Math.max(...Object.values(round.pts));
+    for (const [id, p] of Object.entries(round.pts)) {
+      const row = (rows[id] ||= {
+        id,
+        name: room.players?.[id]?.name ?? round.names[id] ?? 'Player',
+        pts: 0,
+        wins: 0,
+      });
+      row.pts += p;
+      if (p === top && top === PLACE_POINTS[0]) row.wins += 1;
+    }
+  }
+  return Object.values(rows).sort((a, b) => b.pts - a.pts || b.wins - a.wins);
 }

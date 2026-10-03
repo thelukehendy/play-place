@@ -3,7 +3,7 @@ import { Welcome } from './Welcome';
 import { Library } from './Library';
 import { SoloPlay } from './SoloPlay';
 import { RoomSession } from './RoomSession';
-import { Results } from './Results';
+import { Results, type SoloResult } from './Results';
 import { Stats } from './Stats';
 import {
   allConnectedReady,
@@ -23,7 +23,9 @@ import { usePartyLifecycle } from '../multiplayer/usePartyLifecycle';
 import { useWakeLock } from '../multiplayer/useWakeLock';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
 import { randomSeed } from '../lib/random';
-import type { GameFinishPayload } from '../games/types';
+import { recordSolo } from '../lib/bests';
+import { dailySeed, getDailyStatus, recordDaily } from '../lib/daily';
+import { registerAvatars } from '../lib/avatars';
 import { Panel } from '../ui/Panel';
 import { Button } from '../ui/Button';
 import { PartyChatProvider } from './PartyChat';
@@ -35,14 +37,9 @@ type Screen =
   | { name: 'welcome' }
   | { name: 'library' }
   | { name: 'stats' }
-  | { name: 'solo'; gameId: string; key: number }
+  | { name: 'solo'; gameId: string; key: number; daily?: string }
   | { name: 'room' }
-  | {
-      name: 'results';
-      gameId: string;
-      title: string;
-      payload: GameFinishPayload;
-    };
+  | { name: 'results'; result: SoloResult; daily?: string };
 
 function readRoomFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search);
@@ -68,6 +65,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [partyNote, setPartyNote] = useState('');
+  const recordedRun = useRef<number | null>(null);
 
   const goLibrary = useCallback(() => setScreen({ name: 'library' }), []);
   const goHome = useCallback(() => setScreen({ name: 'welcome' }), []);
@@ -111,6 +109,7 @@ export function App() {
     const playerId = getOrCreatePlayerId();
     return subscribeRoom(roomCode, (room) => {
       setRoomSnap(room);
+      registerAvatars(room?.players);
 
       if (!room) {
         clearRoomBinding();
@@ -319,6 +318,15 @@ export function App() {
           <Library
             onBack={goHome}
             onSolo={(gameId) => setScreen({ name: 'solo', gameId, key: randomSeed() })}
+            onDaily={() => {
+              const status = getDailyStatus();
+              setScreen({
+                name: 'solo',
+                gameId: status.gameId,
+                key: randomSeed(),
+                daily: status.dateKey,
+              });
+            }}
             onCreateRoom={handleCreate}
             onJoinRoom={handleJoin}
             activeRoom={roomCode}
@@ -338,19 +346,34 @@ export function App() {
             key={screen.key}
             runId={screen.key}
             gameId={screen.gameId}
-            onExit={goLibrary}
-            onResults={({ gameId, title, payload }) =>
-              setScreen({ name: 'results', gameId, title, payload })
+            fixedSeed={
+              screen.daily ? dailySeed(screen.daily, screen.gameId) : undefined
             }
+            onExit={goLibrary}
+            onResults={({ gameId, title, payload }) => {
+              if (recordedRun.current === screen.key) return;
+              recordedRun.current = screen.key;
+              const record = recordSolo(gameId, payload.score);
+              const daily = screen.daily
+                ? {
+                    ...recordDaily(screen.daily, gameId, payload.score),
+                    dateKey: screen.daily,
+                  }
+                : undefined;
+              setScreen({
+                name: 'results',
+                daily: screen.daily,
+                result: { gameId, title, payload, record, daily },
+              });
+            }}
           />
         ) : null}
 
         {screen.name === 'results' ? (
           <Results
-            title={screen.title}
-            payload={screen.payload}
+            result={screen.result}
             onAgain={() =>
-              setScreen({ name: 'solo', gameId: screen.gameId, key: randomSeed() })
+              setScreen({ name: 'solo', gameId: screen.result.gameId, key: randomSeed() })
             }
             onLibrary={goLibrary}
           />

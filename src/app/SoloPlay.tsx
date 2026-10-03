@@ -1,16 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getGame } from '../games/registry';
 import type { GameFinishPayload } from '../games/types';
 import { randomSeed } from '../lib/random';
 import { ensureNickname, getOrCreatePlayerId } from '../lib/player';
+import { hasSeenRules, markRulesSeen, setLastPlayed } from '../lib/seen';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
+import { HowToSheet } from '../ui/HowToSheet';
 import { ScreenHeader } from './PartyChat';
 
 type Props = {
   gameId: string;
   /** Changes on every Play again / library launch so a new seed is guaranteed. */
   runId: number;
+  /** Fixed seed for the daily challenge (disables reshuffling). */
+  fixedSeed?: number;
   onExit: () => void;
   onResults: (payload: {
     gameId: string;
@@ -19,15 +23,22 @@ type Props = {
   }) => void;
 };
 
-export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
+const RESTART_LABEL = {
+  puzzle: 'New puzzle',
+  level: 'New level',
+  game: 'New game',
+} as const;
+
+export function SoloPlay({ gameId, runId, fixedSeed, onExit, onResults }: Props) {
   const game = getGame(gameId);
   /** Extra reshuffles from the in-game "New puzzle" button. */
   const [reshuffle, setReshuffle] = useState(0);
+  const [showHowTo, setShowHowTo] = useState(() => !!game && !hasSeenRules(gameId));
   const seed = useMemo(
-    () => randomSeed(),
+    () => fixedSeed ?? randomSeed(),
     // Intentionally re-roll whenever the run or reshuffle changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gameId, runId, reshuffle],
+    [gameId, runId, reshuffle, fixedSeed],
   );
   const player = useMemo(
     () => ({ id: getOrCreatePlayerId(), name: ensureNickname() }),
@@ -39,6 +50,10 @@ export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
     [seed, gameId, game],
   );
 
+  useEffect(() => {
+    setLastPlayed(gameId);
+  }, [gameId]);
+
   if (!game || !initialState) {
     return (
       <Panel>
@@ -49,14 +64,13 @@ export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
   }
 
   const Solo = game.SoloView;
+  const compact =
+    gameId === 'anagram-sprint' || gameId === 'word-claim' || gameId === 'inertia';
+  const canReshuffle = game.restart !== 'none' && fixedSeed === undefined;
 
   return (
     <div
-      className={`stack solo-play${
-        gameId === 'anagram-sprint' || gameId === 'word-claim' || gameId === 'inertia'
-          ? ' solo-play--compact'
-          : ''
-      }`}
+      className={`stack solo-play${compact ? ' solo-play--compact' : ''}`}
       style={{ animation: 'pop-in 0.3s var(--bounce)' }}
     >
       <ScreenHeader
@@ -66,18 +80,25 @@ export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
           </h2>
         }
         action={
-          <Button variant="ghost" onClick={onExit}>
-            Exit
-          </Button>
+          <div className="header-actions">
+            <Button
+              variant="ghost"
+              className="icon-btn"
+              aria-label="How to play"
+              onClick={() => setShowHowTo(true)}
+            >
+              ?
+            </Button>
+            <Button variant="ghost" onClick={onExit}>
+              Exit
+            </Button>
+          </div>
         }
       />
-      <Panel
-        className={
-          gameId === 'anagram-sprint' || gameId === 'word-claim' || gameId === 'inertia'
-            ? 'solo-play-panel'
-            : ''
-        }
-      >
+      {fixedSeed !== undefined ? (
+        <p className="daily-chip">📅 Daily challenge — same puzzle for everyone today</p>
+      ) : null}
+      <Panel className={compact ? 'solo-play-panel' : ''}>
         <Solo
           key={seed}
           seed={seed}
@@ -86,15 +107,20 @@ export function SoloPlay({ gameId, runId, onExit, onResults }: Props) {
           onFinish={(payload) => onResults({ gameId, title: game.title, payload })}
         />
       </Panel>
-      {gameId === 'anagram-sprint' || gameId === 'word-claim' ? null : (
-        <Button
-          variant="sky"
-          block
-          onClick={() => setReshuffle((n) => n + 1)}
-        >
-          New puzzle
+      {canReshuffle ? (
+        <Button variant="sky" block onClick={() => setReshuffle((n) => n + 1)}>
+          {RESTART_LABEL[game.restart as keyof typeof RESTART_LABEL]}
         </Button>
-      )}
+      ) : null}
+
+      <HowToSheet
+        game={game}
+        open={showHowTo}
+        onClose={() => {
+          markRulesSeen(gameId);
+          setShowHowTo(false);
+        }}
+      />
     </div>
   );
 }

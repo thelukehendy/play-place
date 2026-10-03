@@ -49,6 +49,8 @@ export type TurnGameProps<S> = {
   onFinish: (payload: GameFinishPayload & { winnerId?: string }) => void;
 };
 
+export type GameCategory = 'versus' | 'reflex' | 'puzzle' | 'words';
+
 export type GameDefinition<S = unknown> = {
   id: string;
   title: string;
@@ -56,6 +58,13 @@ export type GameDefinition<S = unknown> = {
   emoji: string;
   accent: string;
   modes: GameMode[];
+  category: GameCategory;
+  /** Label for the solo reshuffle button; 'none' hides it. */
+  restart: 'puzzle' | 'level' | 'game' | 'none';
+  /** Eligible for the seeded daily challenge. */
+  daily: boolean;
+  /** Short 2–3 step explainer shown on first play and from the "?" button. */
+  howTo: string[];
   /** one-line rule shown in-game */
   rules: string;
   createInitialState: (seed: number, players: PlayerInfo[]) => S;

@@ -50,10 +50,7 @@ export function ChatButton() {
     <Button
       variant="gold"
       className="chat-header-btn"
-      onClick={() => {
-        sfxTap();
-        openChat();
-      }}
+      onClick={openChat}
       aria-label={unread ? `Open party chat, ${unread} new` : 'Open party chat'}
     >
       Chat

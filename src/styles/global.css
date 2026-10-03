@@ -284,3 +284,96 @@ a {
 .spacer {
   flex: 1;
 }
+
+button:focus-visible,
+a:focus-visible,
+[role='switch']:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Night mode: calmer background and slightly dimmed panels. */
+:root[data-theme='night'] {
+  --cream: #efe6cc;
+  --cloud: #f3f0e6;
+}
+
+:root[data-theme='night'] body {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -10%, #3b4fa8 0%, transparent 55%),
+    linear-gradient(180deg, #0c1a4a 0%, #123a63 52%, #0f3d2c 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='auto'] {
+    --cream: #efe6cc;
+    --cloud: #f3f0e6;
+  }
+
+  :root[data-theme='auto'] body {
+    background:
+      radial-gradient(ellipse 120% 80% at 50% -10%, #3b4fa8 0%, transparent 55%),
+      linear-gradient(180deg, #0c1a4a 0%, #123a63 52%, #0f3d2c 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Color-blind friendly player palette (Okabe–Ito). */
+:root[data-cb='on'] .dab-h.p1,
+:root[data-cb='on'] .dab-v.p1 {
+  background: #d55e00;
+}
+:root[data-cb='on'] .dab-h.p2,
+:root[data-cb='on'] .dab-v.p2 {
+  background: #0072b2;
+}
+:root[data-cb='on'] .dab-h.p3,
+:root[data-cb='on'] .dab-v.p3 {
+  background: #cc79a7;
+}
+:root[data-cb='on'] .dab-h.p4,
+:root[data-cb='on'] .dab-v.p4 {
+  background: #e6c200;
+}
+:root[data-cb='on'] .dab-box.p1 {
+  background: rgba(213, 94, 0, 0.3);
+  color: #8a3d00;
+}
+:root[data-cb='on'] .dab-box.p2 {
+  background: rgba(0, 114, 178, 0.28);
+  color: #004f7c;
+}
+:root[data-cb='on'] .dab-box.p3 {
+  background: rgba(204, 121, 167, 0.35);
+  color: #7d3a62;
+}
+:root[data-cb='on'] .dab-box.p4 {
+  background: rgba(230, 194, 0, 0.35);
+  color: #6e5a00;
+}
+:root[data-cb='on'] .dab-seat.p1,
+:root[data-cb='on'] .dab-turn-banner.p1.is-theirs {
+  border-color: #d55e00;
+}
+:root[data-cb='on'] .dab-seat.p2,
+:root[data-cb='on'] .dab-turn-banner.p2.is-theirs {
+  border-color: #0072b2;
+}
+:root[data-cb='on'] .dab-seat.p3,
+:root[data-cb='on'] .dab-turn-banner.p3.is-theirs {
+  border-color: #cc79a7;
+}
+:root[data-cb='on'] .dab-seat.p4,
+:root[data-cb='on'] .dab-turn-banner.p4.is-theirs {
+  border-color: #e6c200;
+}

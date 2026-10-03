@@ -9,6 +9,7 @@ import { wordClaimGame } from './word-claim';
 import { dotsBoxesGame } from './dots-boxes';
 import { whackGridGame } from './whack-grid';
 import { inertiaGame } from './inertia';
+import { lightsOutGame } from './lights-out';
 import type { GameDefinition } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,6 +18,7 @@ export const GAMES: GameDefinition<any>[] = [
   slideRaceGame,
   memoryMatchGame,
   colorFloodGame,
+  lightsOutGame,
   signalTapGame,
   pipeConnectGame,
   anagramSprintGame,
