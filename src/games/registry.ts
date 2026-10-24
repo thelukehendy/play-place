@@ -12,6 +12,12 @@ import { inertiaGame } from './inertia';
 import { lightsOutGame } from './lights-out';
 import { connectFourGame } from './connect-four';
 import { memoryDuelGame } from './memory-duel';
+import { duoDropGame } from './duo-drop';
+import { stackAttackGame } from './stack-attack';
+import { hotPotatoGame } from './hot-potato';
+import { claimCrownGame } from './claim-crown';
+import { echoTapGame } from './echo-tap';
+import { lootDashGame } from './loot-dash';
 import type { GameDefinition } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,6 +34,12 @@ export const GAMES: GameDefinition<any>[] = [
   dotsBoxesGame,
   connectFourGame,
   memoryDuelGame,
+  stackAttackGame,
+  claimCrownGame,
+  duoDropGame,
+  hotPotatoGame,
+  echoTapGame,
+  lootDashGame,
   whackGridGame,
   inertiaGame,
 ];

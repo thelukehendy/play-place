@@ -1,0 +1,134 @@
+.dd-wrap {
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.dd-stage {
+  display: grid;
+  grid-template-columns: 1fr 72px;
+  gap: 10px;
+  align-items: start;
+}
+
+.dd-board {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  padding: 4px;
+  background: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.dd-cell {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.dd-cell.on {
+  border: 1.5px solid rgba(26, 26, 46, 0.55);
+  background: var(--c, var(--sky));
+}
+
+.dd-cell.ghost {
+  background: transparent;
+  border: 1.5px dashed rgba(255, 255, 255, 0.45);
+}
+
+.dd-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-next {
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: var(--cream);
+  padding: 6px;
+  text-align: center;
+}
+
+.dd-next-label {
+  font-weight: 800;
+  font-size: 0.72rem;
+  margin-bottom: 4px;
+}
+
+.dd-next-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 12px);
+  grid-template-rows: repeat(2, 12px);
+  gap: 2px;
+  margin: 0 auto;
+  width: max-content;
+}
+
+.dd-next-cell {
+  border-radius: 2px;
+  background: transparent;
+}
+
+.dd-next-cell.on {
+  background: var(--c, var(--sky));
+  border: 1px solid var(--ink);
+}
+
+.dd-stat {
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: var(--cream);
+  padding: 6px 8px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.dd-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1.2fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dd-btn {
+  min-height: 52px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 0 var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.25rem;
+  color: var(--ink);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dd-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.dd-btn.drop {
+  background: var(--sky);
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.dd-btn.rot {
+  background: var(--gold);
+}
+
+.dd-over {
+  margin-top: 10px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+}

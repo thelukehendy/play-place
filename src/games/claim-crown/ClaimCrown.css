@@ -1,0 +1,53 @@
+.cc-map {
+  --n: 5;
+  display: grid;
+  grid-template-columns: repeat(var(--n), 1fr);
+  gap: 6px;
+  max-width: 320px;
+  margin: 10px auto 0;
+  touch-action: manipulation;
+}
+
+.cc-tile {
+  aspect-ratio: 1;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 0 var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--ink);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cc-tile:disabled {
+  opacity: 1;
+}
+
+.cc-tile.open:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.cc-tile.open.can {
+  background: rgba(245, 197, 24, 0.35);
+}
+
+.cc-tile.seat-1 {
+  background: var(--red);
+  color: #fff;
+}
+.cc-tile.seat-2 {
+  background: var(--sky);
+  color: #fff;
+}
+.cc-tile.seat-3 {
+  background: var(--green);
+  color: #fff;
+}
+.cc-tile.seat-4 {
+  background: var(--gold);
+  color: var(--ink);
+}

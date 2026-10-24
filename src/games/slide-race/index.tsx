@@ -161,7 +161,22 @@ function Board({
         <Stat>Moves: {state.moves}</Stat>
         <Stat>{formatTime(elapsed)}</Stat>
       </GameHud>
-      <Rules text="Tap a tile beside the gap — it slides into place. Order 1–8!" />
+      <Rules text="Tap a tile beside the gap to slide it." />
+      <div className="slide-goal" aria-label="Goal: numbers 1 to 8 left to right, top to bottom, empty bottom-right">
+        <span className="slide-goal-label">Goal</span>
+        <div className="slide-goal-grid" aria-hidden>
+          {Array.from({ length: TOTAL }, (_, i) => {
+            const want = i === TOTAL - 1 ? 0 : i + 1;
+            const ok = state.tiles[i] === want;
+            return (
+              <span key={i} className={`slide-goal-cell ${ok ? 'ok' : ''} ${want === 0 ? 'gap' : ''}`}>
+                {want === 0 ? '·' : want}
+              </span>
+            );
+          })}
+        </div>
+        <span className="slide-goal-hint">1→8 left to right, empty bottom-right</span>
+      </div>
       <div className="slide-board" style={{ ['--n' as string]: N }}>
         <div
           className="slide-empty"
@@ -174,11 +189,13 @@ function Board({
         />
         {positions.map(({ t, i }) => {
           const canMove = movable.has(i) && !state.finishedAt;
+          const home = t - 1; // solved index for this number
+          const inPlace = i === home;
           return (
             <button
               key={t}
               type="button"
-              className={`slide-tile ${canMove ? 'can-move' : ''}`}
+              className={`slide-tile ${canMove ? 'can-move' : ''} ${inPlace ? 'in-place' : ''}`}
               style={
                 {
                   ['--c' as string]: i % N,
@@ -187,6 +204,7 @@ function Board({
               }
               disabled={!canMove}
               onClick={() => onClick(i)}
+              aria-label={inPlace ? `${t}, in place` : `${t}`}
             >
               {t}
             </button>
@@ -242,8 +260,12 @@ export const slideRaceGame: GameDefinition<SlideState> = {
   category: 'puzzle',
   restart: 'puzzle',
   daily: true,
-  howTo: ["Tap a tile next to the gap to slide it.", "Put the tiles back in order.", "Fastest clear wins."],
-  rules: 'Tap a tile beside the gap to slide it. Fastest clear wins!',
+  howTo: [
+    'Tap a tile next to the empty gap to slide it.',
+    'Goal: 1–2–3 on top, then 4–5–6, then 7–8–empty (left → right).',
+    'Fastest clear wins.',
+  ],
+  rules: 'Slide tiles into order: 1→8 left-to-right, empty bottom-right.',
   createInitialState: (seed) => createSlideState(seed),
   SoloView,
   RaceView,

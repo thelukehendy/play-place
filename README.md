@@ -1,6 +1,6 @@
 # Play Place
 
-Phone-friendly mini-game arcade with **14 games**, solo play, and room-code multiplayer.
+Phone-friendly mini-game arcade with **20 games**, solo play, and room-code multiplayer.
 
 Bright toybox / playground vibes (Mario-inspired colors — no Nintendo characters or assets).
 
@@ -18,8 +18,14 @@ Bright toybox / playground vibes (Mario-inspired colors — no Nintendo characte
 10. **Dots & Boxes** — turn-based duel (vs CPU solo)
 11. **Connect Four** — turn-based duel, 2–4 players (vs CPU solo)
 12. **Memory Duel** — turn-based pair-grabbing duel (vs CPU solo)
-13. **Whack Grid** — smash glowing blocks before they vanish
-14. **Inertia** — slide the ball onto dashed anchors, grab gems, dodge mines
+13. **Stack Attack** — drop blocks, match 3+, clear the well
+14. **Claim the Crown** — grab territory on a 5×5 map
+15. **Duo Drop** — phone Tetris — clear 12 lines (~30s–3min)
+16. **Hot Potato** — tap the glowing cell before it hops
+17. **Echo Tap** — copy the pad rhythm
+18. **Loot Dash** — pick doors for treasure, dodge traps
+19. **Whack Grid** — smash glowing blocks before they vanish
+20. **Inertia** — slide the ball onto dashed anchors, grab gems, dodge mines
 
 ## Features
 
