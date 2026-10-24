@@ -17,7 +17,7 @@ import { sfxBad, sfxClaim, sfxPop } from '../../lib/sfx';
 import './StackAttack.css';
 
 const COLS = 6;
-const ROWS = 10;
+const ROWS = 8;
 const MAX_PLAYERS = 4;
 
 export type StackState = {
@@ -213,7 +213,7 @@ function Board({
       : `Waiting for ${names[state.turn] ?? 'player'}`;
 
   return (
-    <div>
+    <div className="sa-root">
       <TurnRoster
         turn={state.turn}
         meIndex={meIndex}
@@ -222,15 +222,8 @@ function Board({
         onSeatTap={onNudgePlayer}
       />
       <TurnBanner over={state.over} myTurn={myTurn} turnIndex={state.turn} text={text} />
-      <Rules text="Drop your color. Match 3+ to clear, score, and go again." />
-      <div className="sa-well" style={{ ['--cols' as string]: COLS }} data-sfx="off">
-        {state.cells.map((v, i) => (
-          <span
-            key={i}
-            className={`sa-cell ${v ? `filled seat-${v}` : ''} ${cleared.has(i) ? 'cleared' : ''}`}
-          />
-        ))}
-      </div>
+      <Rules text="Tap a column to drop. Match 3+ to clear, score, and go again." />
+      {/* Drop affordances ABOVE the well so Safari's tab bar never covers them */}
       <div className="sa-cols" data-sfx="off">
         {Array.from({ length: COLS }, (_, c) => (
           <button
@@ -242,6 +235,35 @@ function Board({
             onClick={() => onDrop(c)}
           >
             ▼
+          </button>
+        ))}
+      </div>
+      <div
+        className={`sa-well ${canPlay ? 'can-play' : ''}`}
+        style={{ ['--cols' as string]: COLS }}
+        data-sfx="off"
+      >
+        {Array.from({ length: COLS }, (_, c) => (
+          <button
+            key={c}
+            type="button"
+            className="sa-col"
+            disabled={!canPlay || !canDrop(state.cells, c) || state.over}
+            aria-label={`Column ${c + 1}`}
+            onClick={() => onDrop(c)}
+          >
+            {Array.from({ length: ROWS }, (_, r) => {
+              const i = r * COLS + c;
+              const v = state.cells[i];
+              return (
+                <span
+                  key={i}
+                  className={`sa-cell ${v ? `filled seat-${v}` : ''} ${
+                    cleared.has(i) ? 'cleared' : ''
+                  }`}
+                />
+              );
+            })}
           </button>
         ))}
       </div>
@@ -384,11 +406,11 @@ export const stackAttackGame: GameDefinition<StackState> = {
   restart: 'game',
   daily: false,
   howTo: [
-    'On your turn, drop a block of your color into a column.',
+    'Tap a column (or the ▼ above it) to drop your color.',
     'Match 3+ of your color (touching sides) to clear them and score — then go again.',
     'Most cleared blocks when the well fills wins.',
   ],
-  rules: 'Drop your color. Match 3+ to clear, score, and play again.',
+  rules: 'Tap a column to drop. Match 3+ to clear and go again.',
   createInitialState: createStackState,
   SoloView,
   TurnView,

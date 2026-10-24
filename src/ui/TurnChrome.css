@@ -264,20 +264,49 @@
 
 /* Party play: keep reactions thumbable but short so the board fits. */
 .room-play .reaction-bar {
-  margin: 2px 0 2px;
-  gap: 4px;
+  margin: 0 0 2px;
+  gap: 3px;
 }
 .room-play .reaction-btn {
-  min-width: 40px;
-  min-height: 40px;
-  font-size: 1.15rem;
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 1.05rem;
   border-width: 2px;
   box-shadow: 0 2px 0 var(--ink);
+  border-radius: 12px;
 }
 .room-play .game-rules {
   display: none; /* How-to lives behind "?" — reclaim board space on iPhone */
 }
 .room-play-panel {
-  padding-top: 8px;
-  padding-bottom: 10px;
+  padding-top: 6px;
+  padding-bottom: 8px;
+}
+
+/* Compact turn chrome on party phones so controls stay above Safari's bar */
+.room-play .tc-roster {
+  gap: 6px;
+  margin-bottom: 6px;
+  padding-top: 10px;
+}
+.room-play .tc-seat {
+  min-height: 40px;
+  height: 40px;
+  padding: 4px 8px;
+}
+.room-play .tc-banner {
+  min-height: 40px;
+  padding: 6px 10px;
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+.room-play .tc-avatar {
+  font-size: 1.1rem;
+}
+.room-play .tc-score {
+  font-size: 1rem;
+}
+
+.solo-play .game-rules {
+  margin-bottom: 8px;
 }

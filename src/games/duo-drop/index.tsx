@@ -221,16 +221,16 @@ function lockPiece(state: DropState): DropState {
   return spawned;
 }
 
-/** Gravity interval from elapsed play time — targets ~30s–3min games. */
+/** Gravity interval from elapsed play time — always falling; ramps ~30s–3min. */
 function gravityMs(elapsedMs: number): number {
   const s = elapsedMs / 1000;
-  if (s < 20) return 720;
-  if (s < 40) return 520;
-  if (s < 70) return 340;
-  if (s < 100) return 220;
-  if (s < 140) return 140;
-  if (s < 180) return 100;
-  return 80;
+  if (s < 15) return 580;
+  if (s < 35) return 420;
+  if (s < 60) return 300;
+  if (s < 90) return 200;
+  if (s < 130) return 140;
+  if (s < 170) return 100;
+  return 70;
 }
 
 function ghostY(state: DropState): number {
@@ -245,14 +245,14 @@ function Board({
   onLeft,
   onRight,
   onRotate,
-  onSoft,
+  onHardDrop,
 }: {
   state: DropState;
   elapsed: number;
   onLeft: () => void;
   onRight: () => void;
   onRotate: () => void;
-  onSoft: () => void;
+  onHardDrop: () => void;
 }) {
   const gy = ghostY(state);
   const live = new Set(
@@ -277,7 +277,7 @@ function Board({
         <Stat>Score: {state.score}</Stat>
         <Stat>{formatTime(elapsed)}</Stat>
       </GameHud>
-      <Rules text="Clear 12 lines. Buttons move — game speeds up over time." />
+      <Rules text="Pieces always fall. Drop slams them down. Speeds up over time." />
       <div className="dd-stage">
         <div
           className="dd-board"
@@ -335,7 +335,7 @@ function Board({
           <button type="button" className="dd-btn" aria-label="Move right" onClick={onRight}>
             ▶
           </button>
-          <button type="button" className="dd-btn drop" aria-label="Soft drop" onClick={onSoft}>
+          <button type="button" className="dd-btn drop" aria-label="Hard drop" onClick={onHardDrop}>
             ▼ Drop
           </button>
         </div>
@@ -355,7 +355,14 @@ function useDuoDrop(
 ) {
   const [state, setState] = useState(initial);
   const done = useRef(false);
+  const stateRef = useRef(state);
+  const onFinishRef = useRef(onFinish);
+  const onProgressRef = useRef(onProgress);
   const [now, setNow] = useState(Date.now());
+
+  stateRef.current = state;
+  onFinishRef.current = onFinish;
+  onProgressRef.current = onProgress;
 
   useEffect(() => {
     setState(initial);
@@ -370,35 +377,58 @@ function useDuoDrop(
 
   const elapsed = state.startedAt ? (state.finishedAt ?? now) - state.startedAt : 0;
 
-  // Gravity tick
-  useEffect(() => {
-    if (state.finishedAt || done.current) return;
-    const startedAt = state.startedAt ?? Date.now();
-    if (!state.startedAt) {
-      setState((s) => ({ ...s, startedAt }));
-      return;
+  const finishIfNeeded = (locked: DropState) => {
+    onProgressRef.current?.(locked.lines, locked.score);
+    if (locked.finishedAt && !done.current) {
+      done.current = true;
+      const playMs = (locked.finishedAt ?? Date.now()) - (locked.startedAt ?? Date.now());
+      queueMicrotask(() =>
+        onFinishRef.current(locked.lines, locked.score, playMs, locked.topOut),
+      );
     }
-    const ms = gravityMs(Date.now() - startedAt);
-    const id = window.setInterval(() => {
+  };
+
+  // Continuous gravity — one timeout chain for the whole run (always falling).
+  useEffect(() => {
+    done.current = false;
+    let cancelled = false;
+    let timeoutId = 0;
+
+    setState((s) => (s.startedAt ? s : { ...s, startedAt: Date.now() }));
+
+    const stepGravity = () => {
+      if (cancelled || done.current) return;
       setState((s) => {
         if (s.finishedAt || done.current) return s;
-        if (fits(s.grid, s.cur, s.rot, s.x, s.y + 1)) {
-          return { ...s, y: s.y + 1 };
+        const cur = s.startedAt ? s : { ...s, startedAt: Date.now() };
+        if (fits(cur.grid, cur.cur, cur.rot, cur.x, cur.y + 1)) {
+          return { ...cur, y: cur.y + 1 };
         }
-        const locked = lockPiece(s);
-        onProgress?.(locked.lines, locked.score);
-        if (locked.finishedAt && !done.current) {
-          done.current = true;
-          const playMs = (locked.finishedAt ?? Date.now()) - (locked.startedAt ?? Date.now());
-          queueMicrotask(() =>
-            onFinish(locked.lines, locked.score, playMs, locked.topOut),
-          );
-        }
+        const locked = lockPiece(cur);
+        finishIfNeeded(locked);
         return locked;
       });
-    }, ms);
-    return () => clearInterval(id);
-  }, [state.finishedAt, state.startedAt, state.lines, state.score, onFinish, onProgress]);
+    };
+
+    const loop = () => {
+      if (cancelled || done.current) return;
+      const s = stateRef.current;
+      if (s.finishedAt) return;
+      const startedAt = s.startedAt ?? Date.now();
+      const ms = gravityMs(Date.now() - startedAt);
+      timeoutId = window.setTimeout(() => {
+        stepGravity();
+        loop();
+      }, ms);
+    };
+    loop();
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial]);
 
   const ensureStart = (s: DropState): DropState =>
     s.startedAt ? s : { ...s, startedAt: Date.now() };
@@ -446,30 +476,26 @@ function useDuoDrop(
       return cur;
     });
   };
-  const soft = () => {
+  /** Instant lock at the ghost position — one tap. */
+  const hardDrop = () => {
     if (done.current) return;
     setState((s) => {
       if (s.finishedAt) return s;
       const cur = ensureStart(s);
-      if (fits(cur.grid, cur.cur, cur.rot, cur.x, cur.y + 1)) {
-        return { ...cur, y: cur.y + 1, score: cur.score + 1 };
-      }
-      const locked = lockPiece(cur);
-      onProgress?.(locked.lines, locked.score);
-      if (locked.finishedAt && !done.current) {
-        done.current = true;
-        const playMs = (locked.finishedAt ?? Date.now()) - (locked.startedAt ?? Date.now());
-        queueMicrotask(() => onFinish(locked.lines, locked.score, playMs, locked.topOut));
-      }
+      const y = ghostY(cur);
+      const dropped = Math.max(0, y - cur.y);
+      const next = { ...cur, y, score: cur.score + dropped * 2 };
+      const locked = lockPiece(next);
+      finishIfNeeded(locked);
       return locked;
     });
   };
 
-  return { state, elapsed, left, right, rotate, soft };
+  return { state, elapsed, left, right, rotate, hardDrop };
 }
 
 function SoloView({ initialState, onFinish }: SoloGameProps<DropState>) {
-  const { state, elapsed, left, right, rotate, soft } = useDuoDrop(
+  const { state, elapsed, left, right, rotate, hardDrop } = useDuoDrop(
     initialState,
     (lines, score, playMs, topOut) =>
       onFinish({
@@ -487,13 +513,13 @@ function SoloView({ initialState, onFinish }: SoloGameProps<DropState>) {
       onLeft={left}
       onRight={right}
       onRotate={rotate}
-      onSoft={soft}
+      onHardDrop={hardDrop}
     />
   );
 }
 
 function RaceView(props: RaceGameProps<DropState>) {
-  const { state, elapsed, left, right, rotate, soft } = useDuoDrop(
+  const { state, elapsed, left, right, rotate, hardDrop } = useDuoDrop(
     props.initialState,
     (lines, score, _ms, topOut) => {
       const payload = {
@@ -522,7 +548,7 @@ function RaceView(props: RaceGameProps<DropState>) {
       onLeft={left}
       onRight={right}
       onRotate={rotate}
-      onSoft={soft}
+      onHardDrop={hardDrop}
     />
   );
 }
@@ -538,11 +564,11 @@ export const duoDropGame: GameDefinition<DropState> = {
   restart: 'game',
   daily: false,
   howTo: [
-    '◀ ▶ move, ↻ rotate, ▼ Drop softens.',
-    'Clear rows for points. First to 12 lines (or most before topping out) wins.',
-    'It speeds up — typical games last about 30 seconds to 3 minutes.',
+    '◀ ▶ move, ↻ rotate, ▼ Drop slams the piece to the floor.',
+    'Pieces always fall on their own — faster as time goes on.',
+    'Clear 12 lines (or most before topping out). Typical games last ~30s–3min.',
   ],
-  rules: 'Clear 12 lines. Easy taps — the stack speeds up over time.',
+  rules: 'Pieces always fall. Drop = slam down. Clear 12 lines.',
   createInitialState: (seed) => createDropState(seed),
   SoloView,
   RaceView,

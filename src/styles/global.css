@@ -25,6 +25,8 @@
   --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
+  /* Extra space under Safari's floating tab bar — set by installViewportChrome() */
+  --chrome-bottom: 52px;
 }
 
 *,
@@ -120,12 +122,21 @@ a {
 }
 
 .app-shell {
+  /* svh keeps content above Safari's expanded toolbar; still scroll if needed */
+  min-height: 100svh;
   min-height: 100dvh;
+  max-height: 100svh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
-  padding: calc(12px + var(--safe-top)) 14px calc(16px + var(--safe-bottom));
+  padding: calc(8px + var(--safe-top)) 12px
+    calc(12px + var(--safe-bottom) + var(--chrome-bottom, 52px));
   max-width: 480px;
   margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .panel {
@@ -137,11 +148,11 @@ a {
 }
 
 .room-play {
-  gap: 8px;
+  gap: 6px;
 }
 
 .room-play-panel {
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .room-play .screen-header {
@@ -149,11 +160,15 @@ a {
 }
 
 .room-play .screen-header .h2 {
-  font-size: clamp(1rem, 4vw, 1.25rem);
+  font-size: clamp(1rem, 4vw, 1.2rem);
+}
+
+.solo-play {
+  gap: 8px;
 }
 
 .solo-play--compact {
-  gap: 8px;
+  gap: 6px;
 }
 
 .solo-play--compact .screen-header {
@@ -162,6 +177,16 @@ a {
 
 .solo-play-panel {
   padding: 10px 12px;
+}
+
+/* Keep bottom game controls clear of browser chrome */
+.dd-controls,
+.sa-cols,
+.c4-board,
+.hp-grid,
+.et-pads,
+.ld-doors {
+  margin-bottom: 4px;
 }
 
 .btn {

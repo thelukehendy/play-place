@@ -1,19 +1,85 @@
+.sa-root {
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.sa-cols {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  margin: 4px auto 0;
+}
+
+.sa-drop {
+  min-height: 40px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 0 var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--ink);
+  touch-action: manipulation;
+}
+
+.sa-drop:disabled {
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+.sa-drop:not(:disabled):active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.sa-drop.mine {
+  background: var(--gold);
+}
+
 .sa-well {
   --cols: 6;
   display: grid;
   grid-template-columns: repeat(var(--cols), 1fr);
   gap: 3px;
-  max-width: 280px;
-  margin: 10px auto 0;
-  padding: 6px;
+  margin: 6px auto 0;
+  padding: 5px;
+  max-height: min(42svh, 300px);
   background: var(--ink);
   border: 3px solid var(--ink);
   border-radius: 14px;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
 }
 
+.sa-well.can-play {
+  outline: 3px solid rgba(67, 176, 71, 0.55);
+  outline-offset: 3px;
+}
+
+.sa-col {
+  display: grid;
+  grid-template-rows: repeat(8, 1fr);
+  gap: 3px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  touch-action: manipulation;
+  min-width: 0;
+}
+
+.sa-well.can-play .sa-col:not(:disabled):active {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.sa-col:disabled {
+  cursor: default;
+}
+
 .sa-cell {
   aspect-ratio: 1;
+  min-height: 0;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.12);
 }
@@ -32,40 +98,5 @@
   background: var(--green);
 }
 .sa-cell.seat-4 {
-  background: var(--gold);
-}
-
-.sa-cols {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 3px;
-  max-width: 280px;
-  margin: 10px auto 0;
-}
-
-.sa-drop {
-  min-height: 48px;
-  border: 3px solid var(--ink);
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 3px 0 var(--ink);
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 1.1rem;
-  color: var(--ink);
-  touch-action: manipulation;
-}
-
-.sa-drop:disabled {
-  opacity: 0.4;
-  box-shadow: none;
-}
-
-.sa-drop:not(:disabled):active {
-  transform: translateY(3px);
-  box-shadow: 0 0 0 var(--ink);
-}
-
-.sa-drop.mine {
   background: var(--gold);
 }

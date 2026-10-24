@@ -15,6 +15,7 @@
   grid-template-columns: repeat(10, 1fr);
   gap: 2px;
   padding: 4px;
+  max-height: min(48svh, 360px);
   background: var(--ink);
   border: 3px solid var(--ink);
   border-radius: 12px;
@@ -93,11 +94,11 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1.2fr;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .dd-btn {
-  min-height: 52px;
+  min-height: 48px;
   border: 3px solid var(--ink);
   border-radius: 14px;
   background: #fff;

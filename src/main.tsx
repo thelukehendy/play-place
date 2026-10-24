@@ -3,10 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
 import { applySettings } from './lib/settings';
 import { installGlobalFeedback } from './lib/sfx';
+import { installViewportChrome } from './lib/viewportChrome';
 import './styles/global.css';
 
 applySettings();
 installGlobalFeedback();
+installViewportChrome();
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
