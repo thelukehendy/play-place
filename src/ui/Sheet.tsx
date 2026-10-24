@@ -7,11 +7,13 @@ export function Sheet({
   onClose,
   children,
   label,
+  className,
 }: {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
   label: string;
+  className?: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -33,7 +35,7 @@ export function Sheet({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <Panel className="pick-sheet">{children}</Panel>
+      <Panel className={`pick-sheet${className ? ` ${className}` : ''}`}>{children}</Panel>
     </div>,
     document.body,
   );

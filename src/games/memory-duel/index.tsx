@@ -147,11 +147,13 @@ function Board({
           const o = state.owner[i];
           const up = !!o || state.flipped.includes(i);
           const bad = up && !o && isMismatch(state);
+          const win =
+            state.over && lead.length === 1 && o === lead[0] + 1;
           return (
             <button
               key={i}
               type="button"
-              className={`md-card ${up ? 'up' : ''} ${o ? `owned seat-${o}` : ''} ${bad ? 'bad' : ''}`}
+              className={`md-card ${up ? 'up' : ''} ${o ? `owned seat-${o}` : ''} ${bad ? 'bad' : ''} ${win ? 'win' : ''}`}
               disabled={!canPlay || up || state.flipped.length >= 2}
               aria-label={up ? `Card ${icon}` : 'Hidden card'}
               onClick={() => onFlip(i)}

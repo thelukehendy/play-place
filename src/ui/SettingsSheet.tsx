@@ -60,10 +60,8 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   const [avatar, setAvatar] = useState(() => getMyAvatar(playerId));
 
   return (
-    <Sheet open={open} onClose={onClose} label="Settings">
-      <p className="h3" style={{ marginBottom: 10 }}>
-        Settings
-      </p>
+    <Sheet open={open} onClose={onClose} label="Settings" className="settings-sheet">
+      <p className="h3">Settings</p>
 
       <p className="set-section">Your avatar</p>
       <div className="avatar-grid">
@@ -88,7 +86,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
       <div className="set-list">
         <Toggle
           label="Sound effects"
-          hint="Silent switch on your iPhone mutes sound"
+          hint="iPhone silent switch mutes"
           on={s.sound}
           onChange={(v) => updateSettings({ sound: v })}
         />
@@ -100,7 +98,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         />
         <Toggle
           label="Color-blind friendly"
-          hint="Distinct colors and shapes for players"
+          hint="Shapes + clearer colors"
           on={s.colorblind}
           onChange={(v) => updateSettings({ colorblind: v })}
         />
@@ -121,7 +119,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         ))}
       </div>
 
-      <Button variant="gold" block onClick={onClose} style={{ marginTop: 14 }}>
+      <Button variant="gold" block onClick={onClose} className="settings-done">
         Done
       </Button>
     </Sheet>

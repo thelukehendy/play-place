@@ -6,7 +6,7 @@ import { RoomSession } from './RoomSession';
 import { Results, type SoloResult } from './Results';
 import { Stats } from './Stats';
 import {
-  allConnectedReady,
+  partyCanStart,
   createRoom,
   getPresence,
   isCountdownActive,
@@ -137,16 +137,17 @@ export function App() {
       }
 
       if (room.status === 'results') {
-        // Keep the same key as the match so Results does not remount / flash.
+        // Keep match key stable. Do not force `room` screen — browsing Games
+        // while results are up must stay on Library (no toggle loop).
         setMatchKey(`${room.gameId}:${room.seed}`);
-        setScreen((current) => (current.name === 'room' ? current : { name: 'room' }));
       }
     });
   }, [roomCode, clearRoomBinding]);
 
   const finishWelcome = async () => {
     ensureNickname();
-    const code = inviteCode ?? readStoredRoom();
+    // Only jump into a party from an invite link (?room=CODE).
+    // A stale localStorage room must not hijack a normal visit.
     if (inviteCode) {
       setBusy(true);
       setError('');
@@ -164,19 +165,8 @@ export function App() {
       }
       return;
     }
-    if (code) {
-      // Soft rejoin from last session — land in library with PartyLinked, not a surprise lobby.
-      setBusy(true);
-      try {
-        const player = { id: getOrCreatePlayerId(), name: ensureNickname() };
-        await joinRoom(code, player);
-        bindRoom(code);
-        setPartyNote(`Back in party ${code}. Open Lobby when friends are ready.`);
-      } catch {
-        clearRoomBinding();
-      } finally {
-        setBusy(false);
-      }
+    if (readStoredRoom()) {
+      clearRoomBinding();
     }
     setScreen({ name: 'library' });
   };
@@ -253,10 +243,10 @@ export function App() {
     try {
       const shouldStart =
         opts?.start === true ||
-        (opts?.start !== false && !!roomSnap && allConnectedReady(roomSnap));
+        (opts?.start !== false && !!roomSnap && partyCanStart(roomSnap));
       if (shouldStart) {
-        if (roomSnap && !allConnectedReady(roomSnap)) {
-          setError('Everyone online must ready up before starting.');
+        if (roomSnap && !partyCanStart(roomSnap)) {
+          setError('Friends need to ready up before starting.');
           return;
         }
         await startPartyGame(roomCode, gameId);

@@ -452,6 +452,13 @@ export function allConnectedReady(room: RoomData, now = nowMs()): boolean {
   return online.length > 0 && online.every((p) => !!p.ready);
 }
 
+/** Host is always "ready" — guests online must tap Ready. */
+export function partyCanStart(room: RoomData, now = nowMs()): boolean {
+  const online = onlinePlayers(room, now);
+  if (!online.length) return false;
+  return online.every((p) => p.id === room.hostId || !!p.ready);
+}
+
 export function hostName(room: RoomData): string {
   return room.players?.[room.hostId]?.name ?? 'Host';
 }
@@ -602,13 +609,6 @@ async function beginCountdown(
   const t = nowMs();
   const seatMode = opts.seat ?? 'ready';
 
-  const shouldSeat = (p: RoomPlayer) => {
-    if (seatMode === 'online') return isPlayerOnline(p, t);
-    // Ready players keep their seat through a brief lock-screen soft-away.
-    if (p.ready) return isPlayerOnline(p, t) || playerAwayMs(p, t) < SOFT_AWAY_MS * 2;
-    return false;
-  };
-
   if (!isFirebaseConfigured()) {
     const store = readLocal();
     const room = store[normalized];
@@ -622,6 +622,13 @@ async function beginCountdown(
     room.gameState = null;
     room.winnerId = null;
     room.suggestions = {};
+    const shouldSeat = (p: RoomPlayer) => {
+      if (seatMode === 'online') return isPlayerOnline(p, t);
+      // Host never needs Ready.
+      if (p.id === room.hostId && isPlayerOnline(p, t)) return true;
+      if (p.ready) return isPlayerOnline(p, t) || playerAwayMs(p, t) < SOFT_AWAY_MS * 2;
+      return false;
+    };
     for (const p of Object.values(room.players)) {
       p.presence = shouldSeat(p) ? 'playing' : 'lobby';
       p.ready = false;
@@ -631,8 +638,17 @@ async function beginCountdown(
   }
 
   const { db } = getFirebase();
-  const snap = await get(ref(db, `rooms/${normalized}/players`));
-  const players = (snap.exists() ? snap.val() : {}) as Record<string, RoomPlayer>;
+  const roomSnap = await get(ref(db, `rooms/${normalized}`));
+  if (!roomSnap.exists()) return;
+  const roomMeta = roomSnap.val() as RoomData;
+  const players = (roomMeta.players || {}) as Record<string, RoomPlayer>;
+  const hostId = roomMeta.hostId;
+  const shouldSeat = (p: RoomPlayer) => {
+    if (seatMode === 'online') return isPlayerOnline(p, t);
+    if (p.id === hostId && isPlayerOnline(p, t)) return true;
+    if (p.ready) return isPlayerOnline(p, t) || playerAwayMs(p, t) < SOFT_AWAY_MS * 2;
+    return false;
+  };
   const updates: Record<string, unknown> = {
     status: 'countdown',
     seed: nextSeed,
@@ -1085,13 +1101,17 @@ export async function markFinished(code: string, playerId: string) {
     const room = store[normalized];
     if (!room) return;
     room.finished = { ...room.finished, [playerId]: true };
-    if (allMatchPlayersFinished(room)) {
-      room.status = 'results';
-      writeLocal(store);
-      await autoReadyOnline(normalized);
-      return;
-    }
     writeLocal(store);
+    if (!allMatchPlayersFinished(room)) return;
+    // Linger so the last finish is visible before standings.
+    await new Promise((r) => setTimeout(r, 1800));
+    const store2 = readLocal();
+    const live = store2[normalized];
+    if (!live || live.status === 'results') return;
+    if (!allMatchPlayersFinished(live)) return;
+    live.status = 'results';
+    writeLocal(store2);
+    await autoReadyOnline(normalized);
     return;
   }
   const { db } = getFirebase();
@@ -1100,10 +1120,16 @@ export async function markFinished(code: string, playerId: string) {
   if (!roomSnap.exists()) return;
   const room = roomSnap.val() as RoomData;
   room.finished = { ...(room.finished || {}), [playerId]: true };
-  if (allMatchPlayersFinished(room)) {
-    await update(ref(db, `rooms/${normalized}`), { status: 'results' });
-    await autoReadyOnline(normalized);
-  }
+  if (!allMatchPlayersFinished(room)) return;
+  await new Promise((r) => setTimeout(r, 1800));
+  const fresh = await get(ref(db, `rooms/${normalized}`));
+  if (!fresh.exists()) return;
+  const live = fresh.val() as RoomData;
+  if (live.status === 'results') return;
+  live.finished = { ...(live.finished || {}), [playerId]: true };
+  if (!allMatchPlayersFinished(live)) return;
+  await update(ref(db, `rooms/${normalized}`), { status: 'results' });
+  await autoReadyOnline(normalized);
 }
 
 export async function setSharedGameState(code: string, gameState: unknown) {
@@ -1179,6 +1205,8 @@ export function suggestionTally(
 }
 
 export async function finishTurnGame(code: string, winnerId?: string) {
+  // Let every client admire the winning move on the shared board first.
+  await new Promise((r) => setTimeout(r, 2400));
   await patchRoom(code, { status: 'results', winnerId: winnerId ?? null });
   await autoReadyOnline(code);
 }

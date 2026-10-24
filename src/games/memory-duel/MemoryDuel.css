@@ -100,3 +100,25 @@
     animation: none;
   }
 }
+
+.md-card.win {
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--gold), 0 4px 0 var(--seat, var(--ink));
+  animation: md-win 0.7s ease-in-out infinite;
+  z-index: 1;
+}
+
+@keyframes md-win {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-card.win {
+    animation: none;
+  }
+}

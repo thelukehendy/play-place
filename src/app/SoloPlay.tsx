@@ -7,6 +7,7 @@ import { hasSeenRules, markRulesSeen, setLastPlayed } from '../lib/seen';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
 import { HowToSheet } from '../ui/HowToSheet';
+import { afterCelebrate } from '../lib/celebrate';
 import { ScreenHeader } from './PartyChat';
 
 type Props = {
@@ -104,7 +105,9 @@ export function SoloPlay({ gameId, runId, fixedSeed, onExit, onResults }: Props)
           seed={seed}
           player={player}
           initialState={initialState}
-          onFinish={(payload) => onResults({ gameId, title: game.title, payload })}
+          onFinish={(payload) => {
+            afterCelebrate(() => onResults({ gameId, title: game.title, payload }));
+          }}
         />
       </Panel>
       {canReshuffle ? (

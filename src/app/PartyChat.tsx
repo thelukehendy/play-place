@@ -167,7 +167,11 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     fresh.forEach((m) => seen.current.add(m.id));
     const incoming = fresh.filter((m) => m.fromId !== playerId);
     if (!incoming.length) return;
-    if (!open) setUnread((u) => Math.min(99, u + incoming.length));
+    if (open) {
+      // Message already visible in the sheet — never stack a toast on top.
+      return;
+    }
+    setUnread((u) => Math.min(99, u + incoming.length));
     setToasts((t) => [...t, ...incoming].slice(-4));
     incoming.forEach((m) => {
       window.setTimeout(() => {
@@ -188,6 +192,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     // Skip notices about yourself (you already know you left / were made host locally).
     const incoming = fresh.filter((n) => n.playerId !== playerId);
     if (!incoming.length) return;
+    if (open) return;
     const asToasts = incoming.map((n: RoomNotice & { id: string }) => ({
       id: n.id,
       fromId: 'system',
@@ -201,7 +206,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
         setToasts((t) => t.filter((x) => x.id !== m.id));
       }, TOAST_MS);
     });
-  }, [notices, playerId, code, room]);
+  }, [notices, playerId, code, room, open]);
 
   // Keep toast positioning honest even when chat is closed (Safari chrome resize).
   useEffect(() => {
@@ -310,6 +315,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
   const openChat = useCallback(() => {
     setOpen(true);
     setUnread(0);
+    setToasts([]); // drop any floating toast so it can't layer over the sheet
   }, []);
   const ctx = useMemo(
     () => ({ openChat, enabled: !!code, unread }),

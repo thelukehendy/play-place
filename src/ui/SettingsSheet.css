@@ -1,22 +1,35 @@
+/* Compact settings — must fit a typical iPhone viewport without scrolling. */
+.settings-sheet.pick-sheet {
+  /* Fit small iPhones with Safari chrome; never force an inner scroll. */
+  max-height: min(94svh, 100dvh - 24px);
+  overflow: hidden;
+  padding: 10px 12px 12px;
+}
+
+.settings-sheet .h3 {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+}
+
 .set-section {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 0.95rem;
-  margin: 12px 0 6px;
+  font-size: 0.85rem;
+  margin: 8px 0 4px;
   opacity: 0.85;
 }
 
 .avatar-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
+  gap: 4px;
 }
 
 .avatar-pick {
-  min-height: 44px;
-  font-size: 1.5rem;
-  border: 3px solid var(--ink);
-  border-radius: 12px;
+  min-height: 40px;
+  font-size: 1.35rem;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
   background: var(--cloud);
   padding: 0;
   line-height: 1;
@@ -24,28 +37,27 @@
 
 .avatar-pick.on {
   background: var(--gold);
-  box-shadow: 0 3px 0 var(--ink);
-  transform: translateY(-1px);
+  box-shadow: 0 2px 0 var(--ink);
 }
 
 .set-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 5px;
+  margin-top: 8px;
 }
 
 .set-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  min-height: 52px;
-  padding: 8px 12px;
+  min-height: 42px;
+  padding: 5px 10px;
   text-align: left;
-  border: 3px solid var(--ink);
-  border-radius: 14px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
   background: var(--cloud);
   color: inherit;
 }
@@ -53,25 +65,29 @@
 .set-row-text {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
+  min-width: 0;
 }
 
 .set-row-label {
   font-weight: 800;
+  font-size: 0.92rem;
+  line-height: 1.15;
 }
 
 .set-row-hint {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
   opacity: 0.65;
+  line-height: 1.2;
 }
 
 .set-switch {
   flex-shrink: 0;
-  width: 46px;
-  height: 28px;
+  width: 42px;
+  height: 26px;
   border-radius: 999px;
-  border: 3px solid var(--ink);
+  border: 2px solid var(--ink);
   background: #cfd3da;
   position: relative;
   transition: background 0.15s;
@@ -81,8 +97,8 @@
   position: absolute;
   top: 1px;
   left: 1px;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--cloud);
   border: 2px solid var(--ink);
@@ -94,23 +110,23 @@
 }
 
 .set-row.on .set-knob {
-  transform: translateX(18px);
+  transform: translateX(16px);
 }
 
 .seg {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border: 3px solid var(--ink);
-  border-radius: 14px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
   overflow: hidden;
 }
 
 .seg-btn {
-  min-height: 44px;
+  min-height: 40px;
   font-weight: 800;
   background: var(--cloud);
   color: inherit;
-  border-right: 3px solid var(--ink);
+  border-right: 2px solid var(--ink);
 }
 
 .seg-btn:last-child {
@@ -120,6 +136,10 @@
 .seg-btn.on {
   background: var(--sky);
   color: #fff;
+}
+
+.settings-done {
+  margin-top: 10px !important;
 }
 
 .howto-list {

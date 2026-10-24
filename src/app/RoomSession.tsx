@@ -11,7 +11,7 @@ import {
   resetSeries,
   seriesStandings,
   sendReaction,
-  allConnectedReady,
+  partyCanStart,
   clearNudge,
   finishTurnGame,
   getPresence,
@@ -161,8 +161,9 @@ export function RoomSession({
   }
 
   if (room.status === 'lobby' || optedOutOfMatch) {
-    const readyOk = allConnectedReady(room, now);
+    const readyOk = partyCanStart(room, now);
     const amReady = !!me?.ready;
+    const showReadyBtn = !isHost; // Host starts — guests Ready.
     return (
       <div className="stack" style={{ animation: 'pop-in 0.3s var(--bounce)' }}>
         <ScreenHeader
@@ -255,7 +256,7 @@ export function RoomSession({
             onError={setError}
           />
 
-          {!optedOutOfMatch ? (
+          {!optedOutOfMatch && showReadyBtn ? (
             <>
               <div style={{ height: 12 }} />
               <Button
@@ -271,6 +272,10 @@ export function RoomSession({
                 {amReady ? 'Ready!' : 'Ready?'}
               </Button>
             </>
+          ) : !optedOutOfMatch && isHost ? (
+            <p className="muted" style={{ marginTop: 10, textAlign: 'center', fontWeight: 700 }}>
+              You&apos;re the host — start when friends are Ready.
+            </p>
           ) : null}
 
           <div style={{ height: 14 }} />
@@ -325,7 +330,7 @@ export function RoomSession({
             <>
               {!readyOk ? (
                 <p className="muted" style={{ marginBottom: 8 }}>
-                  Waiting for friends to tap Ready.
+                  Waiting for friends to tap Ready (you don&apos;t need to).
                 </p>
               ) : null}
               <Button
