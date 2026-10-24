@@ -495,7 +495,12 @@ function playerStatusLabel(room: RoomData, p: RoomPlayer, now: number): string {
     }
     return 'in lobby';
   }
-  if (room.status === 'results') return p.ready ? 'Ready!' : 'not ready';
+  if (room.status === 'results') {
+    if (p.id === room.hostId) return 'Host';
+    return p.ready ? 'Ready!' : 'not ready';
+  }
+  // Lobby
+  if (p.id === room.hostId) return 'Host';
   return p.ready ? 'Ready!' : 'not ready';
 }
 
