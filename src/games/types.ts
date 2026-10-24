@@ -47,6 +47,8 @@ export type TurnGameProps<S> = {
   state: S;
   onStateChange: (state: S) => void;
   onFinish: (payload: GameFinishPayload & { winnerId?: string }) => void;
+  /** Optional: tap another seat to nudge them (multiplayer). */
+  onNudgePlayer?: (playerId: string) => void;
 };
 
 export type GameCategory = 'versus' | 'reflex' | 'puzzle' | 'words';

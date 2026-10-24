@@ -115,7 +115,14 @@ export function PartyLinked({ code, onLobby, onQuitMultiplayer }: Props) {
         <Button variant="primary" block onClick={onLobby}>
           Lobby
         </Button>
-        <Button variant="ghost" block onClick={onQuitMultiplayer}>
+        <Button
+          variant="ghost"
+          block
+          onClick={() => {
+            if (!window.confirm('Leave this party?')) return;
+            onQuitMultiplayer();
+          }}
+        >
           Leave party
         </Button>
       </div>

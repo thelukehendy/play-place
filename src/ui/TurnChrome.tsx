@@ -18,23 +18,30 @@ export function TurnRoster({
   meIndex,
   over,
   showGlyph = false,
+  onSeatTap,
 }: {
   seats: Seat[];
   turn: number;
   meIndex: number;
   over: boolean;
   showGlyph?: boolean;
+  onSeatTap?: (playerId: string) => void;
 }) {
   return (
     <div className="tc-roster" role="list" aria-label="Players">
       {seats.map((s, i) => {
         const active = !over && turn === i;
         const isYou = meIndex === i;
+        const canTap = !!onSeatTap && !!s.id && !isYou;
+        const Tag = canTap ? 'button' : 'div';
         return (
-          <div
+          <Tag
             key={`${s.id ?? s.name}-${i}`}
-            role="listitem"
-            className={`tc-seat seat-${i + 1} ${active ? 'is-turn' : ''} ${isYou ? 'is-you' : ''}`}
+            role={canTap ? undefined : 'listitem'}
+            type={canTap ? 'button' : undefined}
+            className={`tc-seat seat-${i + 1} ${active ? 'is-turn' : ''} ${isYou ? 'is-you' : ''} ${canTap ? 'tc-seat--tap' : ''}`}
+            onClick={canTap ? () => onSeatTap!(s.id!) : undefined}
+            aria-label={canTap ? `Nudge ${s.name}` : undefined}
           >
             <span className="tc-avatar" aria-hidden>
               {s.avatar ?? (s.id ? avatarOf(s.id) : '🤖')}
@@ -46,7 +53,7 @@ export function TurnRoster({
             </span>
             {s.score !== undefined ? <span className="tc-score">{s.score}</span> : null}
             {active ? <span className="tc-badge">Turn</span> : null}
-          </div>
+          </Tag>
         );
       })}
     </div>

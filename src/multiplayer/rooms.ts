@@ -103,7 +103,7 @@ export const HARD_AWAY_MS = 20_000;
 /** @deprecated alias — soft threshold for UI “away” labels */
 export const AWAY_MS = SOFT_AWAY_MS;
 /** Promote a new host when the current host has been away this long. */
-export const HOST_AWAY_MS = 40_000;
+export const HOST_AWAY_MS = 90_000;
 /** Auto-forfeit a race participant after hard/soft away this long. */
 export const MATCH_FORFEIT_MS = 55_000;
 /** Turn-based games get a longer forfeit grace (thinking + lock screen). */
@@ -231,10 +231,10 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
     const room = store[normalized];
     if (!room) throw new Error('Room not found. Check the code.');
     const existing = room.players[player.id];
-    if (!existing && Object.keys(room.players).length >= MAX_PLAYERS) {
+    if (!existing && seatedPlayerCount(room) >= MAX_PLAYERS) {
       throw new Error(`Room is full (max ${MAX_PLAYERS} players).`);
     }
-    const midMatch = isMatchLive(room);
+    const midMatch = isMatchInProgress(room);
     const reconnecting =
       !!existing &&
       getPresence(existing) === 'playing' &&
@@ -244,7 +244,8 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
     room.players[player.id] = playerPayload(player, {
       joinedAt: existing?.joinedAt ?? nowMs(),
       presence: reconnecting ? 'playing' : 'lobby',
-      ready: false,
+      // Keep ready across soft reconnects in lobby/results; mid-match seats stay playing.
+      ready: reconnecting ? false : !!existing?.ready,
     });
     writeLocal(store);
     if (!existing) {
@@ -270,10 +271,10 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
   if (!snap.exists()) throw new Error('Room not found. Check the code.');
   const room = snap.val() as RoomData;
   const existing = room.players?.[player.id];
-  if (!existing && Object.keys(room.players || {}).length >= MAX_PLAYERS) {
+  if (!existing && seatedPlayerCount(room) >= MAX_PLAYERS) {
     throw new Error(`Room is full (max ${MAX_PLAYERS} players).`);
   }
-  const midMatch = isMatchLive(room);
+  const midMatch = isMatchInProgress(room);
   const reconnecting =
     !!existing &&
     getPresence(existing) === 'playing' &&
@@ -286,7 +287,7 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
     playerPayload(player, {
       joinedAt: existing?.joinedAt ?? nowMs(),
       presence: reconnecting ? 'playing' : 'lobby',
-      ready: false,
+      ready: reconnecting ? false : !!existing?.ready,
     }),
   );
   await armDisconnect(normalized, player.id);
@@ -378,6 +379,16 @@ export function isCountdownActive(room: RoomData, now = nowMs()): boolean {
   if (room.status !== 'countdown') return false;
   const ends = room.countdownEndsAt ?? 0;
   return ends > 0 && now < ends;
+}
+
+/** Countdown or live play — used for reconnect / sit-out decisions. */
+export function isMatchInProgress(room: RoomData, now = nowMs()): boolean {
+  return isMatchLive(room, now) || room.status === 'countdown';
+}
+
+/** Players who still occupy a seat for capacity (not long-gone ghosts). */
+export function seatedPlayerCount(room: RoomData, now = nowMs()): number {
+  return playersList(room).filter((p) => isPlayerOnline(p, now) || playerAwayMs(p, now) < PRUNE_AWAY_MS).length;
 }
 
 /** Player is currently racing/playing in the live match. */
@@ -539,7 +550,7 @@ export async function setRoomGame(code: string, gameId: string) {
     room.suggestions = {};
     for (const p of Object.values(room.players)) {
       p.presence = 'lobby';
-      p.ready = false;
+      // Keep ready when only switching games — rematch friction killer.
     }
     writeLocal(store);
     return;
@@ -559,20 +570,31 @@ export async function setRoomGame(code: string, gameId: string) {
   };
   for (const id of Object.keys(players)) {
     updates[`players/${id}/presence`] = 'lobby';
-    updates[`players/${id}/ready`] = false;
   }
   await update(ref(db, `rooms/${normalized}`), updates);
 }
 
-/** Shared 3-2-1 then match — only online players enter the race. */
+/**
+ * Shared 3-2-1 then match.
+ * seat='ready' (default): anyone who tapped Ready (even soft-away) + online ready.
+ * seat='online': rematch — every currently online player is seated (no Ready tap).
+ */
 async function beginCountdown(
   code: string,
-  opts: { gameId?: string; seed?: number } = {},
+  opts: { gameId?: string; seed?: number; seat?: 'ready' | 'online' } = {},
 ) {
   const normalized = code.trim().toUpperCase();
   const nextSeed = opts.seed ?? randomSeed();
   const countdownEndsAt = nowMs() + 3000;
   const t = nowMs();
+  const seatMode = opts.seat ?? 'ready';
+
+  const shouldSeat = (p: RoomPlayer) => {
+    if (seatMode === 'online') return isPlayerOnline(p, t);
+    // Ready players keep their seat through a brief lock-screen soft-away.
+    if (p.ready) return isPlayerOnline(p, t) || playerAwayMs(p, t) < SOFT_AWAY_MS * 2;
+    return false;
+  };
 
   if (!isFirebaseConfigured()) {
     const store = readLocal();
@@ -588,8 +610,7 @@ async function beginCountdown(
     room.winnerId = null;
     room.suggestions = {};
     for (const p of Object.values(room.players)) {
-      const online = isPlayerOnline(p, t);
-      p.presence = online ? 'playing' : 'lobby';
+      p.presence = shouldSeat(p) ? 'playing' : 'lobby';
       p.ready = false;
     }
     writeLocal(store);
@@ -611,24 +632,50 @@ async function beginCountdown(
   };
   if (opts.gameId) updates.gameId = opts.gameId;
   for (const [id, p] of Object.entries(players)) {
-    const online = isPlayerOnline(p, t);
-    updates[`players/${id}/presence`] = online ? 'playing' : 'lobby';
+    updates[`players/${id}/presence`] = shouldSeat(p) ? 'playing' : 'lobby';
     updates[`players/${id}/ready`] = false;
   }
   await update(ref(db, `rooms/${normalized}`), updates);
 }
 
 export async function startMatch(code: string, _seed?: number) {
-  await beginCountdown(code, { seed: randomSeed() });
+  await beginCountdown(code, { seed: randomSeed(), seat: 'ready' });
 }
 
 /** Host picks a game and everyone jumps into the countdown together. */
 export async function startPartyGame(code: string, gameId: string, _seed?: number) {
-  await beginCountdown(code, { gameId, seed: randomSeed() });
+  await beginCountdown(code, { gameId, seed: randomSeed(), seat: 'ready' });
 }
 
+/** Play again — seat everyone online, no Ready tap required. */
 export async function rematch(code: string) {
-  await beginCountdown(code, { seed: randomSeed() });
+  await beginCountdown(code, { seed: randomSeed(), seat: 'online' });
+}
+
+/** Mark online finishers ready so the next lobby start is one tap. */
+export async function autoReadyOnline(code: string) {
+  const normalized = code.trim().toUpperCase();
+  const t = nowMs();
+  if (!isFirebaseConfigured()) {
+    const store = readLocal();
+    const room = store[normalized];
+    if (!room) return;
+    for (const p of Object.values(room.players)) {
+      if (isPlayerOnline(p, t)) p.ready = true;
+    }
+    writeLocal(store);
+    return;
+  }
+  const { db } = getFirebase();
+  const snap = await get(ref(db, `rooms/${normalized}/players`));
+  const players = (snap.exists() ? snap.val() : {}) as Record<string, RoomPlayer>;
+  const updates: Record<string, unknown> = {};
+  for (const [id, p] of Object.entries(players)) {
+    if (isPlayerOnline(p, t)) updates[`players/${id}/ready`] = true;
+  }
+  if (Object.keys(updates).length) {
+    await update(ref(db, `rooms/${normalized}`), updates);
+  }
 }
 
 export async function promoteCountdownToPlaying(code: string) {
@@ -1025,6 +1072,9 @@ export async function markFinished(code: string, playerId: string) {
     room.finished = { ...room.finished, [playerId]: true };
     if (allMatchPlayersFinished(room)) {
       room.status = 'results';
+      writeLocal(store);
+      await autoReadyOnline(normalized);
+      return;
     }
     writeLocal(store);
     return;
@@ -1037,6 +1087,7 @@ export async function markFinished(code: string, playerId: string) {
   room.finished = { ...(room.finished || {}), [playerId]: true };
   if (allMatchPlayersFinished(room)) {
     await update(ref(db, `rooms/${normalized}`), { status: 'results' });
+    await autoReadyOnline(normalized);
   }
 }
 
@@ -1114,6 +1165,7 @@ export function suggestionTally(
 
 export async function finishTurnGame(code: string, winnerId?: string) {
   await patchRoom(code, { status: 'results', winnerId: winnerId ?? null });
+  await autoReadyOnline(code);
 }
 
 export async function sendChatMessage(

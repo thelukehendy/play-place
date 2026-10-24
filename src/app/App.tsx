@@ -68,7 +68,8 @@ export function App() {
   const recordedRun = useRef<number | null>(null);
 
   const goLibrary = useCallback(() => setScreen({ name: 'library' }), []);
-  const goHome = useCallback(() => setScreen({ name: 'welcome' }), []);
+  /** "Home" means the games library — never bounce back through the splash. */
+  const goHome = useCallback(() => setScreen({ name: 'library' }), []);
 
   usePartyLifecycle(roomCode);
 
@@ -136,7 +137,8 @@ export function App() {
       }
 
       if (room.status === 'results') {
-        setMatchKey(`${room.gameId}:${room.seed}:results`);
+        // Keep the same key as the match so Results does not remount / flash.
+        setMatchKey(`${room.gameId}:${room.seed}`);
         setScreen((current) => (current.name === 'room' ? current : { name: 'room' }));
       }
     });
@@ -163,11 +165,13 @@ export function App() {
       return;
     }
     if (code) {
+      // Soft rejoin from last session — land in library with PartyLinked, not a surprise lobby.
       setBusy(true);
       try {
         const player = { id: getOrCreatePlayerId(), name: ensureNickname() };
         await joinRoom(code, player);
         bindRoom(code);
+        setPartyNote(`Back in party ${code}. Open Lobby when friends are ready.`);
       } catch {
         clearRoomBinding();
       } finally {
@@ -212,16 +216,19 @@ export function App() {
   const quitMultiplayer = async () => {
     const code = roomCode;
     const playerId = getOrCreatePlayerId();
-    clearRoomBinding();
-    setPartyNote('');
-    setScreen({ name: 'library' });
     if (code) {
+      setBusy(true);
       try {
         await leaveRoom(code, playerId);
       } catch {
-        /* ignore */
+        /* still clear local binding */
+      } finally {
+        setBusy(false);
       }
     }
+    clearRoomBinding();
+    setPartyNote('');
+    setScreen({ name: 'library' });
   };
 
   const quitGame = async () => {

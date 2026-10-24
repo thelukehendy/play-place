@@ -277,8 +277,8 @@ export function RoomSession({
           <p className="h3">Game</p>
           <p className="muted" style={{ margin: '4px 0 8px' }}>
             {isHost
-              ? 'You pick the games for the party.'
-              : `${hostName(room)} picks the games — hang tight.`}
+              ? 'Pick a game, then Start when friends are Ready.'
+              : `${hostName(room)} starts the match — tap Ready when you are.`}
           </p>
           {matchLive && optedOutOfMatch ? (
             <p style={{ fontWeight: 800 }}>
@@ -325,7 +325,7 @@ export function RoomSession({
             <>
               {!readyOk ? (
                 <p className="muted" style={{ marginBottom: 8 }}>
-                  Waiting for everyone online to ready up before start.
+                  Waiting for friends to tap Ready.
                 </p>
               ) : null}
               <Button
@@ -334,17 +334,10 @@ export function RoomSession({
                 disabled={!readyOk}
                 onClick={() => {
                   if (!readyOk) return;
-                  if (
-                    !window.confirm(
-                      `Start ${game?.title ?? 'this game'} for the whole party?`,
-                    )
-                  ) {
-                    return;
-                  }
                   startMatch(room.code).catch((err) => setError(String(err)));
                 }}
               >
-                Start match!
+                Start {game?.emoji} {game?.title ?? 'match'}
               </Button>
             </>
           ) : (
@@ -352,7 +345,14 @@ export function RoomSession({
           )}
 
           <div style={{ height: 14 }} />
-          <Button variant="ghost" block onClick={onLeaveParty}>
+          <Button
+            variant="ghost"
+            block
+            onClick={() => {
+              if (!window.confirm('Leave this party? Friends will stay in the room.')) return;
+              onLeaveParty();
+            }}
+          >
             Leave party
           </Button>
         </Panel>
@@ -368,10 +368,6 @@ export function RoomSession({
         isHost={isHost}
         now={now}
         onRematch={() => {
-          if (!allConnectedReady(room, now)) {
-            setError('Everyone online must ready up for a rematch.');
-            return;
-          }
           rematch(room.code).catch((err) => setError(String(err)));
         }}
         onPickGame={(gameId) => onHostPickGame(gameId, { start: false })}
@@ -737,9 +733,6 @@ function ResultsRoom({
   const game = getGame(room.gameId);
   const players = playersList(room);
   const boardPlayers = players.map((p) => ({ id: p.id, name: p.name }));
-  const readyOk = allConnectedReady(room, now);
-  const me = room.players?.[playerId];
-  const amReady = !!me?.ready;
 
   useEffect(() => {
     const scores = room.scores || {};
@@ -857,34 +850,19 @@ function ResultsRoom({
         </p>
 
         <div style={{ height: 12 }} />
-        <p className="h3">Ready for next?</p>
+        <p className="muted" style={{ textAlign: 'center', fontWeight: 700 }}>
+          Party still linked — no Ready tap needed to play again.
+        </p>
         <ReadyPlayerList room={room} youId={playerId} now={now} onError={onError} />
-        <div style={{ height: 10 }} />
-        <Button
-          variant={amReady ? 'green' : 'sky'}
-          block
-          onClick={() => {
-            sfxReady();
-            setPlayerReady(room.code, playerId, !amReady).catch(() => undefined);
-          }}
-        >
-          {amReady ? 'Ready!' : 'Ready?'}
-        </Button>
 
         <div style={{ height: 14 }} />
         {isHost ? (
           <div className="stack">
-            {readyOk ? (
-              <Button variant="primary" block onClick={onRematch}>
-                Play again — {game?.emoji} {game?.title}
-              </Button>
-            ) : (
-              <p className="muted">
-                Wait for everyone online to ready up, then Play again.
-              </p>
-            )}
+            <Button variant="primary" block onClick={onRematch}>
+              Play again — {game?.emoji} {game?.title}
+            </Button>
             <p className="muted" style={{ marginTop: 4 }}>
-              Or switch games:
+              Or switch games (ready sticks):
             </p>
             <select
               className="field"
@@ -897,35 +875,30 @@ function ResultsRoom({
                 </option>
               ))}
             </select>
-            <Button
-              variant="gold"
-              block
-              disabled={!readyOk}
-              onClick={() => {
-                if (!readyOk) return;
-                onRematch();
-              }}
-            >
-              Rematch
-            </Button>
             <Button variant="ghost" block onClick={onBrowseGames}>
               Browse games
             </Button>
-            <Button variant="ghost" block onClick={onLeaveParty}>
+            <Button
+              variant="ghost"
+              block
+              onClick={() => {
+                if (!window.confirm('Leave this party?')) return;
+                onLeaveParty();
+              }}
+            >
               Leave party
             </Button>
           </div>
         ) : (
           <div className="stack">
             <p className="muted">
-              {readyOk
-                ? `Ready! Waiting for ${hostName(room)} to tap Play again.`
-                : `${hostName(room)} picks the next game. Ready up when you are.`}
+              Waiting for {hostName(room)} to tap Play again
+              {iWon ? ' — or pick the next game below.' : '.'}
             </p>
             {iWon ? (
               <>
                 <p className="muted" style={{ marginTop: 4 }}>
-                  Winner's choice: pick the next game
+                  Winner&apos;s choice
                 </p>
                 <select
                   className="field"
@@ -944,7 +917,14 @@ function ResultsRoom({
             <Button variant="ghost" block onClick={onBrowseGames}>
               Browse games
             </Button>
-            <Button variant="ghost" block onClick={onLeaveParty}>
+            <Button
+              variant="ghost"
+              block
+              onClick={() => {
+                if (!window.confirm('Leave this party?')) return;
+                onLeaveParty();
+              }}
+            >
               Leave party
             </Button>
           </div>
@@ -1110,35 +1090,42 @@ function RoomPlay({
             >
               ?
             </Button>
-            <Button variant="ghost" onClick={onQuitGame}>
-              Quit game
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (!window.confirm('Quit this match? You stay in the party.')) return;
+                onQuitGame();
+              }}
+            >
+              Quit
             </Button>
           </div>
         }
       />
       <HowToSheet game={game} open={showHowTo} onClose={() => setShowHowTo(false)} />
       <Panel className="room-play-panel">
-        <Scoreboard
-          compact
-          title="Match status"
-          players={livePlayers}
-          scores={room.scores || {}}
-          youId={player.id}
-          finished={finishedPlayers}
-          turnPlayerId={turnPlayer?.id ?? null}
-          onPlayerTap={othersLeft ? onTapPlayer : undefined}
-          canTapPlayer={canTapPlayer}
-          reactions={reactions}
-          renderRowExtra={othersLeft ? renderRowExtra : undefined}
-          footerHint={
-            othersLeft && !game.modes.includes('turn')
-              ? 'Tap a name to nudge · remove appears after a nudge (or if they go away)'
-              : undefined
-          }
-        />
-        {game.modes.includes('turn') && othersLeft ? (
-          <ReactionBar code={room.code} playerId={player.id} />
-        ) : null}
+        {game.modes.includes('turn') ? (
+          othersLeft ? <ReactionBar code={room.code} playerId={player.id} /> : null
+        ) : (
+          <Scoreboard
+            compact
+            title="Match status"
+            players={livePlayers}
+            scores={room.scores || {}}
+            youId={player.id}
+            finished={finishedPlayers}
+            turnPlayerId={turnPlayer?.id ?? null}
+            onPlayerTap={othersLeft ? onTapPlayer : undefined}
+            canTapPlayer={canTapPlayer}
+            reactions={reactions}
+            renderRowExtra={othersLeft ? renderRowExtra : undefined}
+            footerHint={
+              othersLeft
+                ? 'Tap a name to nudge · remove appears after a nudge (or if they go away)'
+                : undefined
+            }
+          />
+        )}
         {game.modes.includes('turn') && game.TurnView ? (
           <game.TurnView
             key={`${room.gameId}-${room.seed}`}
@@ -1146,6 +1133,7 @@ function RoomPlay({
             player={player}
             players={players.slice(0, 4)}
             state={(room.gameState as never) ?? initialState}
+            onNudgePlayer={othersLeft ? onTapPlayer : undefined}
             onStateChange={(s) => {
               setSharedGameState(room.code, s).catch((err) => onError(String(err)));
               if (game.getScoresFromState) {

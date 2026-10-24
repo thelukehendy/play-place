@@ -44,7 +44,7 @@ type Props = {
 };
 
 export function Library({
-  onBack,
+  onBack: _onBack,
   onSolo,
   onDaily,
   onCreateRoom,
@@ -128,9 +128,6 @@ export function Library({
             >
               ⚙
             </Button>
-            <Button variant="ghost" onClick={onBack}>
-              Home
-            </Button>
           </div>
         }
       />
@@ -198,23 +195,29 @@ export function Library({
             </button>
           ) : null}
 
+          <p className="library-path-label">Play alone</p>
+          <Button variant="primary" block onClick={quickPlay}>
+            ⚡ Surprise me
+          </Button>
+          <p className="muted library-path-hint">Or tap any game below for solo.</p>
+
+          <p className="library-path-label">Play with friends</p>
           <div className="hero-row">
-            <Button variant="primary" block onClick={quickPlay}>
-              ⚡ Quick play
-            </Button>
             <Button variant="sky" block onClick={() => onCreateRoom(getLastPlayed() ?? 'number-rush')}>
-              👥 Host room
+              👥 Host party
             </Button>
           </div>
 
           <div className="join-row">
             <input
               className="field"
-              placeholder="JOIN CODE"
-              aria-label="Join code"
+              placeholder="Friend's code"
+              aria-label="Join with friend's code"
               maxLength={6}
               inputMode="text"
               autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               onKeyDown={(e) => {
@@ -352,7 +355,7 @@ export function Library({
                   {confirmGame.emoji} {confirmGame.title}
                 </p>
                 <p className="muted" style={{ marginTop: 4, marginBottom: 12 }}>
-                  Start this for the whole party? Everyone online who’s ready will jump in.
+                  Everyone who tapped Ready jumps in. Or pick it for later without starting.
                 </p>
                 <div className="stack">
                   <Button
@@ -363,7 +366,7 @@ export function Library({
                       setConfirmStart(null);
                     }}
                   >
-                    Start match
+                    Start now
                   </Button>
                   <Button
                     variant="sky"
@@ -373,7 +376,7 @@ export function Library({
                       setConfirmStart(null);
                     }}
                   >
-                    Just set game
+                    Set for later
                   </Button>
                   <Button variant="ghost" block onClick={() => setConfirmStart(null)}>
                     Cancel

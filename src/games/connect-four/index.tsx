@@ -199,6 +199,7 @@ function Board({
   meIndex,
   canPlay,
   onDrop,
+  onNudgePlayer,
 }: {
   state: C4State;
   names: string[];
@@ -206,6 +207,7 @@ function Board({
   meIndex: number;
   canPlay: boolean;
   onDrop: (col: number) => void;
+  onNudgePlayer?: (playerId: string) => void;
 }) {
   const myTurn = !state.over && meIndex >= 0 && state.turn === meIndex;
   const iWon = state.over && state.winner > 0 && state.winner - 1 === meIndex;
@@ -230,6 +232,7 @@ function Board({
         meIndex={meIndex}
         over={state.over}
         seats={names.map((name, i) => ({ name, id: ids[i] }))}
+        onSeatTap={onNudgePlayer}
       />
       <TurnBanner over={state.over} myTurn={myTurn} turnIndex={state.turn} text={text} />
       <Rules text="Drop discs. First to connect four in a row wins." />
@@ -352,7 +355,7 @@ function SoloView({ initialState, player, onFinish, onStateChange }: SoloGamePro
   );
 }
 
-function TurnView({ state: rawState, player, players, onStateChange, onFinish }: TurnGameProps<C4State>) {
+function TurnView({ state: rawState, player, players, onStateChange, onFinish, onNudgePlayer }: TurnGameProps<C4State>) {
   const state = useMemo(() => ({ ...rawState, win: rawState.win ?? [] }), [rawState]);
   const seats = players.slice(0, MAX_PLAYERS);
   const meIndex = seats.findIndex((p) => p.id === player.id);
@@ -384,6 +387,7 @@ function TurnView({ state: rawState, player, players, onStateChange, onFinish }:
       meIndex={meIndex}
       canPlay={canPlay}
       onDrop={play}
+      onNudgePlayer={onNudgePlayer}
     />
   );
 }

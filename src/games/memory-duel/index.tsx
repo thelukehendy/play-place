@@ -104,6 +104,7 @@ function Board({
   meIndex,
   canPlay,
   onFlip,
+  onNudgePlayer,
 }: {
   state: DuelState;
   names: string[];
@@ -111,6 +112,7 @@ function Board({
   meIndex: number;
   canPlay: boolean;
   onFlip: (i: number) => void;
+  onNudgePlayer?: (playerId: string) => void;
 }) {
   const pairs = pairsBySeat(state);
   const myTurn = !state.over && meIndex >= 0 && state.turn === meIndex;
@@ -136,6 +138,7 @@ function Board({
         meIndex={meIndex}
         over={state.over}
         seats={names.map((name, i) => ({ name, id: ids[i], score: pairs[i] ?? 0 }))}
+        onSeatTap={onNudgePlayer}
       />
       <TurnBanner over={state.over} myTurn={myTurn} turnIndex={state.turn} text={text} />
       <Rules text="Match a pair to score and go again. Most pairs wins." />
@@ -278,7 +281,7 @@ function SoloView({ initialState, player, onFinish }: SoloGameProps<DuelState>) 
 
 /* ---------- Multiplayer ---------- */
 
-function TurnView({ state: rawState, player, players, onStateChange, onFinish }: TurnGameProps<DuelState>) {
+function TurnView({ state: rawState, player, players, onStateChange, onFinish, onNudgePlayer }: TurnGameProps<DuelState>) {
   const state = useMemo(() => ({ ...rawState, flipped: rawState.flipped ?? [] }), [rawState]);
   const seats = players.slice(0, MAX_PLAYERS);
   const meIndex = seats.findIndex((p) => p.id === player.id);
@@ -316,6 +319,7 @@ function TurnView({ state: rawState, player, players, onStateChange, onFinish }:
       meIndex={meIndex}
       canPlay={canPlay}
       onFlip={flip}
+      onNudgePlayer={onNudgePlayer}
     />
   );
 }

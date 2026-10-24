@@ -243,13 +243,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
       if (key !== lastKey) {
         lastKey = key;
         setFrame(next);
-        // Cancel layout-viewport pan on the app so the game stays put too.
-        if (root) {
-          root.style.transform =
-            next.top || next.left
-              ? `translate(${next.left}px, ${next.top}px)`
-              : '';
-        }
+        // Do not transform #root — that jolts the game board under the dim overlay.
       }
       if (window.scrollY !== 0) window.scrollTo(0, 0);
       raf = window.requestAnimationFrame(tick);
