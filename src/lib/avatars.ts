@@ -28,11 +28,27 @@ export function setMyAvatar(avatar: string) {
 
 const registry = new Map<string, string>();
 
+/** Prefer a free emoji when joining a room so two friends never look identical. */
+export function pickUniqueAvatar(
+  playerId: string,
+  taken: Iterable<string | undefined>,
+): string {
+  const used = new Set([...taken].filter(Boolean) as string[]);
+  const preferred = getMyAvatar(playerId);
+  if (!used.has(preferred)) return preferred;
+  for (const a of AVATARS) {
+    if (!used.has(a)) return a;
+  }
+  return preferred;
+}
+
 /** Remember avatars from the latest room snapshot so any UI can look them up by id. */
-export function registerAvatars(players: Record<string, { avatar?: string }> | undefined) {
+export function registerAvatars(
+  players: Record<string, { avatar?: string }> | undefined,
+) {
   if (!players) return;
   for (const [id, p] of Object.entries(players)) {
-    if (p.avatar) registry.set(id, p.avatar);
+    registry.set(id, p.avatar || avatarFromId(id));
   }
 }
 

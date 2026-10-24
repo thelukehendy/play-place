@@ -186,7 +186,7 @@ function RaceView(props: RaceGameProps<MemoryState>) {
 export const memoryMatchGame: GameDefinition<MemoryState> = {
   id: 'memory-match',
   title: 'Memory Match',
-  blurb: 'Flip cards, find pairs.',
+  blurb: 'Solo/race: flip cards, find every pair.',
   emoji: '🃏',
   accent: 'var(--red)',
   modes: ['solo', 'race'],

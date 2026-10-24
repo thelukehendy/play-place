@@ -260,3 +260,24 @@
   color: inherit;
   cursor: pointer;
 }
+
+
+/* Party play: keep reactions thumbable but short so the board fits. */
+.room-play .reaction-bar {
+  margin: 2px 0 2px;
+  gap: 4px;
+}
+.room-play .reaction-btn {
+  min-width: 40px;
+  min-height: 40px;
+  font-size: 1.15rem;
+  border-width: 2px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+.room-play .game-rules {
+  display: none; /* How-to lives behind "?" — reclaim board space on iPhone */
+}
+.room-play-panel {
+  padding-top: 8px;
+  padding-bottom: 10px;
+}

@@ -12,7 +12,7 @@ import {
 import { getGame } from '../games/registry';
 import { roomCode as makeCode, randomSeed } from '../lib/random';
 import { compareScores, type PlayerInfo, type ScoreValue } from '../games/types';
-import { getMyAvatar } from '../lib/avatars';
+import { getMyAvatar, pickUniqueAvatar } from '../lib/avatars';
 import { getOrCreatePlayerId } from '../lib/player';
 import { ensureAnonAuth, getFirebase, isFirebaseConfigured } from './firebase';
 
@@ -151,6 +151,13 @@ function playerPayload(
   };
 }
 
+function uniqueAvatarFor(playerId: string, players: Record<string, RoomPlayer> | undefined) {
+  const taken = Object.entries(players || {})
+    .filter(([id]) => id !== playerId)
+    .map(([, p]) => p.avatar);
+  return pickUniqueAvatar(playerId, taken);
+}
+
 async function armDisconnect(code: string, playerId: string) {
   if (!isFirebaseConfigured()) return;
   const { db } = getFirebase();
@@ -199,7 +206,11 @@ export async function createRoom(gameId: string, host: PlayerInfo): Promise<Room
     seed: randomSeed(),
     createdAt: nowMs(),
     players: {
-      [host.id]: playerPayload(host, { presence: 'lobby', ready: false }),
+      [host.id]: playerPayload(host, {
+        presence: 'lobby',
+        ready: false,
+        avatar: getMyAvatar(host.id),
+      }),
     },
     scores: {},
     finished: {},
@@ -246,6 +257,7 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
       presence: reconnecting ? 'playing' : 'lobby',
       // Keep ready across soft reconnects in lobby/results; mid-match seats stay playing.
       ready: reconnecting ? false : !!existing?.ready,
+      avatar: existing?.avatar || uniqueAvatarFor(player.id, room.players),
     });
     writeLocal(store);
     if (!existing) {
@@ -288,6 +300,7 @@ export async function joinRoom(code: string, player: PlayerInfo): Promise<RoomDa
       joinedAt: existing?.joinedAt ?? nowMs(),
       presence: reconnecting ? 'playing' : 'lobby',
       ready: reconnecting ? false : !!existing?.ready,
+      avatar: existing?.avatar || uniqueAvatarFor(player.id, room.players),
     }),
   );
   await armDisconnect(normalized, player.id);
@@ -889,6 +902,8 @@ function matchAftermathAfterLoss(room: RoomData, lostPlayerId: string): Partial<
 export async function quitMatch(code: string, playerId: string) {
   const normalized = code.trim().toUpperCase();
   await setPlayerPresence(normalized, playerId, 'lobby');
+  // Stay ready so jumping into the next round is one host tap.
+  await setPlayerReady(normalized, playerId, true).catch(() => undefined);
 
   const applyQuit = (room: RoomData): Partial<RoomData> | null => {
     const finished = { ...(room.finished || {}), [playerId]: true };

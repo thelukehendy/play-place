@@ -395,7 +395,7 @@ function TurnView({ state: rawState, player, players, onStateChange, onFinish, o
 export const connectFourGame: GameDefinition<C4State> = {
   id: 'connect-four',
   title: 'Connect Four',
-  blurb: 'Drop discs, line up four.',
+  blurb: 'Drop discs. First to four in a row wins.',
   emoji: '🔴',
   accent: 'var(--red)',
   modes: ['solo', 'turn'],

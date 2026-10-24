@@ -126,10 +126,9 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollLockY = useRef(0);
-  const player = useMemo(
-    () => ({ id: getOrCreatePlayerId(), name: ensureNickname() }),
-    [],
-  );
+  const playerId = useMemo(() => getOrCreatePlayerId(), []);
+  /** Always read the live nickname — Welcome may set it after this provider mounts. */
+  const player = () => ({ id: playerId, name: ensureNickname() });
 
   useEffect(() => {
     if (!code) {
@@ -166,7 +165,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     }
     const fresh = messages.filter((m) => !seen.current.has(m.id));
     fresh.forEach((m) => seen.current.add(m.id));
-    const incoming = fresh.filter((m) => m.fromId !== player.id);
+    const incoming = fresh.filter((m) => m.fromId !== playerId);
     if (!incoming.length) return;
     if (!open) setUnread((u) => Math.min(99, u + incoming.length));
     setToasts((t) => [...t, ...incoming].slice(-4));
@@ -175,7 +174,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
         setToasts((t) => t.filter((x) => x.id !== m.id));
       }, TOAST_MS);
     });
-  }, [messages, player.id, code, room, open]);
+  }, [messages, playerId, code, room, open]);
 
   useEffect(() => {
     if (!code || !room) return;
@@ -187,7 +186,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     const fresh = notices.filter((n) => !seenNotices.current.has(n.id));
     fresh.forEach((n) => seenNotices.current.add(n.id));
     // Skip notices about yourself (you already know you left / were made host locally).
-    const incoming = fresh.filter((n) => n.playerId !== player.id);
+    const incoming = fresh.filter((n) => n.playerId !== playerId);
     if (!incoming.length) return;
     const asToasts = incoming.map((n: RoomNotice & { id: string }) => ({
       id: n.id,
@@ -202,7 +201,23 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
         setToasts((t) => t.filter((x) => x.id !== m.id));
       }, TOAST_MS);
     });
-  }, [notices, player.id, code, room]);
+  }, [notices, playerId, code, room]);
+
+  // Keep toast positioning honest even when chat is closed (Safari chrome resize).
+  useEffect(() => {
+    if (!code) return;
+    const sync = () => setFrame(readFrame());
+    sync();
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', sync);
+    vv?.addEventListener('scroll', sync);
+    window.addEventListener('resize', sync);
+    return () => {
+      vv?.removeEventListener('resize', sync);
+      vv?.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
+    };
+  }, [code]);
 
   // While chat is open: lock document scroll and continuously pin the portal to
   // the *visual* viewport so iOS keyboard pan cannot slide anything vertically.
@@ -210,7 +225,8 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     if (!open) return;
 
     const preKeyboard = window.visualViewport?.height ?? window.innerHeight;
-    sheetPx.current = Math.max(240, Math.min(Math.round(preKeyboard * 0.4), 340));
+    // Shorter sheet so the lobby / game behind stays recognizable on iPhone.
+    sheetPx.current = Math.max(220, Math.min(Math.round(preKeyboard * 0.36), 300));
 
     scrollLockY.current = window.scrollY || window.pageYOffset || 0;
     const body = document.body;
@@ -266,9 +282,9 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [open, messages.length]);
 
-  const myNudgeAt = room?.nudges?.[player.id]?.at;
-  const myNudgeFrom = room?.nudges?.[player.id]?.fromName;
-  const myNudgeText = room?.nudges?.[player.id]?.text;
+  const myNudgeAt = room?.nudges?.[playerId]?.at;
+  const myNudgeFrom = room?.nudges?.[playerId]?.fromName;
+  const myNudgeText = room?.nudges?.[playerId]?.text;
   useEffect(() => {
     if (!code || !myNudgeAt || !myNudgeFrom) return;
     const id = `nudge-${myNudgeAt}`;
@@ -308,7 +324,7 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
     sfxTap();
     inputRef.current?.focus({ preventScroll: true });
     try {
-      await sendChatMessage(code, player, text);
+      await sendChatMessage(code, player(), text);
     } catch {
       /* ignore */
     }
@@ -353,6 +369,23 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
                   Close
                 </Button>
               </div>
+              <div className="chat-list" ref={listRef}>
+                {messages.length === 0 ? (
+                  <p className="muted" style={{ fontWeight: 700 }}>
+                    Say hi — everyone in the party sees it.
+                  </p>
+                ) : (
+                  messages.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`chat-bubble ${m.fromId === playerId ? 'mine' : ''}`}
+                    >
+                      <span className="chat-who">{m.fromName}</span>
+                      <span className="chat-text">{m.text}</span>
+                    </div>
+                  ))
+                )}
+              </div>
               <form
                 className="chat-compose"
                 onSubmit={(e) => {
@@ -385,23 +418,6 @@ export function PartyChatProvider({ code, children }: ProviderProps) {
                   Send
                 </Button>
               </form>
-              <div className="chat-list" ref={listRef}>
-                {messages.length === 0 ? (
-                  <p className="muted" style={{ fontWeight: 700 }}>
-                    Say hi — everyone in the party sees it.
-                  </p>
-                ) : (
-                  messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`chat-bubble ${m.fromId === player.id ? 'mine' : ''}`}
-                    >
-                      <span className="chat-who">{m.fromName}</span>
-                      <span className="chat-text">{m.text}</span>
-                    </div>
-                  ))
-                )}
-              </div>
             </div>
           </div>,
           document.body,

@@ -179,7 +179,7 @@
   display: flex;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 3px solid var(--ink);
+  border-top: 3px solid var(--ink);
   flex-shrink: 0;
   background: var(--cream);
 }

@@ -327,7 +327,7 @@ function TurnView({ state: rawState, player, players, onStateChange, onFinish, o
 export const memoryDuelGame: GameDefinition<DuelState> = {
   id: 'memory-duel',
   title: 'Memory Duel',
-  blurb: 'Take turns flipping — steal the pairs.',
+  blurb: 'Versus: take turns. Match a pair to go again.',
   emoji: '🧠',
   accent: 'var(--sky)',
   modes: ['solo', 'turn'],

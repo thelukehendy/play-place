@@ -11,15 +11,16 @@ type Props = {
 
 /** Splash → nickname (after 1s) → continue into library or invite lobby. */
 export function Welcome({ invited, onContinue }: Props) {
-  const hadNick = !!getNickname();
-  const [showNick, setShowNick] = useState(hadNick);
+  // Capture once — ensureNickname() must not race this check on the same render.
+  const [returning] = useState(() => !!getNickname());
+  const [showNick, setShowNick] = useState(returning);
   const [nick, setNick] = useState(() => ensureNickname());
 
   useEffect(() => {
-    if (hadNick) return;
+    if (returning) return;
     const t = window.setTimeout(() => setShowNick(true), 600);
     return () => clearTimeout(t);
-  }, [hadNick]);
+  }, [returning]);
 
   return (
     <div className="home">
