@@ -207,9 +207,12 @@ function Board({
       <Rules text="Claim lines. Complete a box to go again. 1–4 players." />
 
       <div className={`dab-board-wrap ${canPlay ? 'can-play' : 'waiting'}`}>
-        {!state.over && !canPlay ? (
-          <p className="dab-wait-hint">Hang tight — not your turn</p>
-        ) : null}
+        <p
+          className={`dab-wait-hint ${state.over || canPlay ? 'is-hidden' : ''}`}
+          aria-hidden={state.over || canPlay}
+        >
+          Hang tight — not your turn
+        </p>
         <div className="dab-board">
           {Array.from({ length: GRID + 1 }, (_, r) => (
             <div key={`hr-${r}`}>
