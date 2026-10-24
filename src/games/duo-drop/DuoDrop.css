@@ -5,17 +5,24 @@
 
 .dd-stage {
   display: grid;
-  grid-template-columns: 1fr 72px;
+  grid-template-columns: minmax(0, 1fr) 72px;
   gap: 10px;
   align-items: start;
 }
 
+/* Fixed 10×16 playfield — never let cells spill outside the well */
 .dd-board {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-rows: repeat(16, minmax(0, 1fr));
   gap: 2px;
   padding: 4px;
-  max-height: min(48svh, 360px);
+  width: 100%;
+  aspect-ratio: 10 / 16;
+  max-height: min(48svh, 420px);
+  max-width: min(100%, calc(min(48svh, 420px) * 10 / 16));
+  margin: 0 auto;
+  overflow: hidden;
   background: var(--ink);
   border: 3px solid var(--ink);
   border-radius: 12px;
@@ -26,7 +33,8 @@
 }
 
 .dd-cell {
-  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.12);
 }
